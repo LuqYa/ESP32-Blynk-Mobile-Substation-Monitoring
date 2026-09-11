@@ -2,6 +2,7 @@
 
 [![ESP32 Firmware Build](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/firmware-build.yml/badge.svg)](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/firmware-build.yml)
 [![Render Bridge Integration Test](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/render-bridge-test.yml/badge.svg)](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/render-bridge-test.yml)
+[![Repository Safety Check](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/repo-safety-check.yml/badge.svg)](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/repo-safety-check.yml)
 
 Laboratory-scale IoT condition monitoring prototype for a 33/11 kV mobile substation using ESP32, Blynk, DHT11 and PZEM-004T.
 
@@ -47,6 +48,8 @@ OpenAI is optional. Without an OpenAI API key, Render uses deterministic rule-ba
 - Current warning advisory test: PASS
 - Sensor-fault advisory test: PASS
 - Critical-condition advisory test: PASS
+- Repository private-file safety check: PASS
+- Obvious OpenAI secret-key pattern check: PASS
 
 ## Current Render Service
 
