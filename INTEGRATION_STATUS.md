@@ -16,7 +16,7 @@ GitHub is the source of truth for firmware, Blynk setup documentation and the Re
 
 ## 2. Render
 
-Status: DEPLOYED
+Status: DEPLOYED / LIVE
 
 Service:
 
@@ -26,9 +26,9 @@ Public URL:
 
 `https://openai-blynk-bridge.onrender.com`
 
-GitHub auto-deploy:
+Latest rebuilt GitHub commit has been deployed successfully.
 
-ENABLED for `main`.
+Render service configuration shows `autoDeploy=yes`, but the latest GitHub commits did not trigger a deploy automatically. The latest version was therefore deployed manually through the Render integration. Native GitHub authorization in Render should be checked if automatic deploys are required for future commits.
 
 Required Render environment variables:
 
@@ -40,6 +40,8 @@ Optional:
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
+
+Current bridge mode without an OpenAI API key: rule-based advisory fallback.
 
 ## 3. Blynk
 
@@ -86,7 +88,7 @@ Body:
 
 ```text
 ESP32 -> Blynk V0-V10 -> V9 webhook -> Render -> V11/V12 -> Blynk dashboard
-GitHub main -> Render auto-deploy
+GitHub repository -> Render deployment
 ```
 
 ## 5. Remaining Private Inputs
@@ -98,5 +100,7 @@ The following values must never be committed to GitHub:
 - Blynk Device Token for Render
 - Webhook secret
 - OpenAI API key, if AI advisory is enabled
+
+Current Render logs show the only required missing value is `BLYNK_DEVICE_TOKEN`.
 
 Once `BLYNK_DEVICE_TOKEN` is present in Render and the V9 webhook is created in Blynk, the GitHub-Blynk-Render chain is complete.
