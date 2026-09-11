@@ -1,6 +1,6 @@
 # Blynk Dashboard Setup
 
-This guide matches `firmware/mobile_substation_monitoring.ino` and the current Blynk Console workflow.
+This guide matches `firmware/mobile_substation_monitoring.ino` and the optional OpenAI bridge in `integration/openai-blynk-bridge/`.
 
 ## 1. Enable Developer Mode
 
@@ -13,16 +13,16 @@ Go to **Developer Zone -> My Templates -> New Template**.
 Use:
 
 - Template Name: `Mobile Substation Monitoring`
-- Hardware: `ESP32` (choose the closest ESP32 option available; use Other only if your board is not listed)
+- Hardware: `ESP32`
 - Connection Type: `WiFi`
 
-After creation, Blynk generates a **Template ID**. Keep this value private/local for use in `firmware/secrets.h`.
+After creation, Blynk generates a **Template ID**. Keep this value local for use in `firmware/secrets.h`.
 
 ## 3. Create Virtual Pin Datastreams
 
 Open the Template -> **Datastreams** -> **Add Datastream** -> **Virtual Pin**.
 
-Create these datastreams exactly so they match the firmware:
+Create these datastreams exactly:
 
 | Pin | Name | Data Type | Unit | Suggested Min | Suggested Max |
 |---|---|---|---|---:|---:|
@@ -37,14 +37,16 @@ Create these datastreams exactly so they match the firmware:
 | V8 | Anomaly Message | String | - | - | - |
 | V9 | Anomaly Flag | Integer | - | 0 | 1 |
 | V10 | Condition Reason | String | - | - | - |
+| V11 | AI Summary | String | - | - | - |
+| V12 | AI Recommended Check | String | - | - | - |
+
+V0-V10 are produced by the ESP32 firmware. V11-V12 are written by the optional OpenAI-Blynk bridge.
 
 Enable history for numerical datastreams when available so charts can show recorded trends.
 
 ## 4. Create the Web Dashboard
 
-Open the Template -> **Web Dashboard** -> **Edit**. Add and configure widgets by assigning each one to its datastream.
-
-Recommended layout:
+Open the Template -> **Web Dashboard** -> **Edit**.
 
 ### System Status
 
@@ -68,13 +70,16 @@ Recommended layout:
 - Power Factor Value -> V7
 - Chart -> V2 and V3
 
-Save the dashboard. The template dashboard defines the interface; live values are viewed from the actual device dashboard after a device is created from the template.
+### AI Advisory
+
+- AI Summary -> V11
+- AI Recommended Check -> V12
+
+Keep this section visually separate from the ESP32 condition state so the dashboard makes clear that AI is advisory only.
 
 ## 5. Create the Device
 
-For this FYP prototype, manual device creation with an Auth Token is suitable.
-
-Go to **Devices / Search -> New Device -> From Template** (wording may vary slightly in the Console).
+Go to **Devices / Search -> New Device -> From Template**.
 
 - Template: `Mobile Substation Monitoring`
 - Device Name: `FYP Mobile Substation Prototype`
@@ -83,57 +88,47 @@ Create the device, open **Device Info**, and copy its **Auth Token** locally. Do
 
 ## 6. Create `secrets.h` Locally
 
-Copy:
+Copy `firmware/secrets.example.h` to `firmware/secrets.h` and fill in your own values locally.
 
-`firmware/secrets.example.h`
-
-and rename the copy to:
-
-`firmware/secrets.h`
-
-Fill in your own values locally:
-
-```cpp
-#pragma once
-
-#define WIFI_SSID "YOUR_WIFI_NAME"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-#define BLYNK_AUTH_TOKEN "YOUR_DEVICE_AUTH_TOKEN"
-#define BLYNK_TEMPLATE_ID "YOUR_TEMPLATE_ID"
-#define BLYNK_TEMPLATE_NAME "Mobile Substation Monitoring"
-```
-
-The repository `.gitignore` excludes `firmware/secrets.h`. Never upload this file manually to a public repository.
+The repository `.gitignore` excludes `firmware/secrets.h`.
 
 ## 7. Mobile Dashboard
 
-Blynk Web Dashboard and Blynk mobile dashboard are configured separately but can use the same datastreams.
+The mobile dashboard can use the same datastreams. Add the main sensor/status widgets first, then add text/value widgets for V11 and V12 if your plan supports them.
 
-In the Blynk mobile app:
+## 8. OpenAI Bridge
 
-1. Enable Developer Mode.
-2. Open the `Mobile Substation Monitoring` template.
-3. Add widgets for Temperature V0, Humidity V1, Voltage V2, Current V3 and Overall Condition V4.
-4. Add labeled values for Power V5, Frequency V6 and Power Factor V7.
-5. Add a SuperChart using V0/V1 and another using V2/V3 where your plan/widget availability permits.
-6. Add an indicator/value for Anomaly Flag V9 and labels for V8/V10.
+The optional bridge is located at:
 
-## 8. Firmware Test Sequence
+`integration/openai-blynk-bridge/`
 
-1. Install the Blynk, DHT and PZEM004Tv30 libraries in Arduino IDE.
-2. Compile `firmware/mobile_substation_monitoring.ino`.
-3. Upload to the ESP32.
-4. Open Serial Monitor at 115200 baud.
-5. Confirm the ESP32 connects to Wi-Fi and Blynk.
-6. Confirm V0/V1 update from DHT11.
-7. With the PZEM-004T connected using an appropriate safe laboratory setup, confirm V2/V3/V5/V6/V7 update.
-8. Confirm V4 reports NORMAL/WARNING/CRITICAL as expected.
-9. Create controlled abnormal conditions and check V8/V9/V10.
-10. Record actual results in `testing/test_results.csv`.
+Architecture:
+
+```text
+ESP32 -> Blynk -> V9 anomaly update -> Blynk Webhook -> Node.js bridge -> OpenAI API -> V11/V12
+```
+
+The bridge is intentionally separate from the ESP32 firmware. The core FYP remains based on threshold, trend and rule-based anomaly detection even if the AI bridge is not running.
+
+Follow `integration/openai-blynk-bridge/README.md` for deployment and webhook configuration.
+
+## 9. Firmware and Integration Test Sequence
+
+1. Install the required Arduino libraries.
+2. Compile and upload `firmware/mobile_substation_monitoring.ino`.
+3. Confirm V0-V10 work in Serial Monitor and Blynk.
+4. Deploy the OpenAI-Blynk bridge to an HTTPS Node.js host.
+5. Configure the Blynk V9 webhook.
+6. Trigger a controlled anomaly.
+7. Confirm V9 changes to 1.
+8. Confirm the bridge receives the webhook.
+9. Confirm V11 receives an AI summary.
+10. Confirm V12 receives a safe recommended laboratory check.
+11. Record the ESP32 result separately from the AI advisory result.
 
 ## Important Notes
 
-- Virtual Pins such as V0 are Blynk software channels, not ESP32 physical GPIO pins.
-- Web and mobile dashboards must be configured independently even though they use the same datastreams.
-- The values in this repository are laboratory prototype thresholds and must be reviewed using actual baseline/test data.
-- Do not connect the laboratory prototype directly to energized 33 kV or 11 kV equipment.
+- Virtual Pins are Blynk software channels, not ESP32 physical GPIO pins.
+- Do not expose Wi-Fi passwords, Blynk tokens, OpenAI API keys or webhook secrets in GitHub.
+- The AI layer must not be used to operate protection, interlocking or switching functions.
+- The prototype must not be connected directly to energized 33 kV or 11 kV equipment.
