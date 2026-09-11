@@ -14,9 +14,21 @@ Branch:
 
 GitHub is the source of truth for the ESP32 firmware, Blynk setup documentation, and Render bridge code.
 
+Firmware CI status: PASS
+
+The repository now includes `.github/workflows/firmware-build.yml`, which installs Arduino CLI, the ESP32 core, Blynk, DHT sensor library, Adafruit Unified Sensor and PZEM004Tv30, then compiles the firmware automatically.
+
+Latest verified build used:
+
+- ESP32 Arduino core 3.3.11
+- Blynk 1.3.5
+- DHT sensor library 1.4.7
+- Adafruit Unified Sensor 1.1.15
+- PZEM004Tv30 1.2.1
+
 ## 2. Render
 
-Status: DEPLOYED
+Status: DEPLOYED AND LIVE
 
 Service:
 
@@ -38,7 +50,7 @@ The default direct integration does NOT require a Blynk Device Token or a Blynk 
 
 ## 3. Blynk
 
-Status: ESP32 CONNECTION REQUIRED
+Status: PHYSICAL ESP32 CONNECTION REQUIRED
 
 Required datastreams:
 
@@ -57,7 +69,7 @@ Required datastreams:
 - V12 Recommended Check
 
 V0-V10 are written by the ESP32 monitoring firmware.
-V11-V12 are also written by the ESP32 after it receives an advisory response from Render.
+V11-V12 are written by the ESP32 after it receives an advisory response from Render.
 
 No Blynk webhook is required for the default integration.
 
@@ -67,13 +79,13 @@ No Blynk webhook is required for the default integration.
 Sensors
   -> ESP32 threshold/trend/rule analysis
   -> Blynk V0-V10
-  -> Render /esp32-analyse when an anomaly occurs
+  -> Render /esp32-analyse on WARNING, CRITICAL, sensor fault, or trend anomaly
   -> Render rule-based advisory (or optional OpenAI advisory)
   -> ESP32 receives SUMMARY/ACTION
   -> Blynk V11/V12
 ```
 
-GitHub provides the source code used by Render and the ESP32 firmware.
+V9 remains specifically the trend-anomaly flag. Threshold WARNING/CRITICAL conditions can still request a Render advisory even when V9 = 0.
 
 ## 5. Optional OpenAI Mode
 
@@ -102,12 +114,16 @@ This mode is optional and is no longer required for the normal FYP demonstration
 
 ## 7. Remaining Physical/Account Actions
 
-The code and Render bridge are configured. To operate the physical prototype, the user still must:
+The firmware now compiles successfully in GitHub Actions and the Render bridge is live. To operate the physical prototype, the remaining actions are:
 
 1. Ensure V0-V12 exist in the Blynk template.
 2. Keep Wi-Fi and Blynk credentials only in local `firmware/secrets.h`.
-3. Compile and upload the latest firmware to the physical ESP32.
-4. Confirm V0-V10 update in Blynk.
-5. Trigger a controlled anomaly and confirm V11/V12 update after the Render response.
+3. Open `firmware/firmware.ino` in Arduino IDE.
+4. Select the actual ESP32 board and COM port.
+5. Upload the latest firmware to the physical ESP32.
+6. Confirm V0-V10 update in Blynk.
+7. Run the tests in `testing/direct_render_blynk_test.md`.
+8. Trigger controlled WARNING, CRITICAL and trend-anomaly cases and confirm V11/V12 update after the Render response.
+9. Record only actual measurements in `testing/test_results.csv`.
 
 Never commit Wi-Fi passwords, Blynk Auth Tokens, OpenAI API keys, or private shared secrets to GitHub.
