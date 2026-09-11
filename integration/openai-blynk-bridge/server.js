@@ -3,44 +3,61 @@ import express from 'express';
 import OpenAI from 'openai';
 
 const app = express();
+app.disable('x-powered-by');
 app.use(express.json({ limit: '64kb' }));
 
-const required = [
+const REQUIRED_ENV = [
   'OPENAI_API_KEY',
   'BLYNK_DEVICE_TOKEN',
   'WEBHOOK_SECRET'
 ];
 
-for (const key of required) {
-  if (!process.env[key]) {
-    console.warn(`Missing environment variable: ${key}`);
-  }
-}
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const BLYNK_SERVER = (process.env.BLYNK_SERVER || 'https://blynk.cloud').replace(/\/$/, '');
 const MODEL = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
 const PORT = Number(process.env.PORT || 3000);
+
+function missingEnvironment() {
+  return REQUIRED_ENV.filter((key) => !process.env[key]);
+}
 
 function clip(value, max = 220) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
 async function getBlynkValues() {
+  if (!process.env.BLYNK_DEVICE_TOKEN) {
+    throw new Error('BLYNK_DEVICE_TOKEN is not configured');
+  }
+
   const url = new URL(`${BLYNK_SERVER}/external/api/getAll`);
   url.searchParams.set('token', process.env.BLYNK_DEVICE_TOKEN);
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: { accept: 'application/json' }
+  });
+
   if (!response.ok) {
     throw new Error(`Blynk getAll failed: ${response.status} ${await response.text()}`);
   }
+
   return response.json();
 }
 
 async function updateBlynk(pin, value) {
+  if (!process.env.BLYNK_DEVICE_TOKEN) {
+    throw new Error('BLYNK_DEVICE_TOKEN is not configured');
+  }
+
   const url = new URL(`${BLYNK_SERVER}/external/api/update`);
   url.searchParams.set('token', process.env.BLYNK_DEVICE_TOKEN);
-  url.searchParams.set(pin.toLowerCase(), clip(value));
+  url.searchParams.set(String(pin).toLowerCase(), clip(value));
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -82,9 +99,11 @@ SUMMARY: <what the measurements indicate>
 ACTION: <safe next inspection/check for the laboratory prototype>
 `;
 
+  const openai = getOpenAIClient();
   const response = await openai.responses.create({
     model: MODEL,
-    input
+    input,
+    max_output_tokens: 160
   });
 
   const text = response.output_text || '';
@@ -95,11 +114,44 @@ ACTION: <safe next inspection/check for the laboratory prototype>
 }
 
 app.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'openai-blynk-bridge' });
+  const missing = missingEnvironment();
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    ok: true,
+    service: 'openai-blynk-bridge',
+    configured: missing.length === 0,
+    missing
+  });
+});
+
+app.get('/ready', (req, res) => {
+  const missing = missingEnvironment();
+  res.set('Cache-Control', 'no-store');
+
+  if (missing.length > 0) {
+    return res.status(503).json({
+      ready: false,
+      missing
+    });
+  }
+
+  res.json({
+    ready: true,
+    model: MODEL,
+    blynkServer: BLYNK_SERVER
+  });
 });
 
 app.post('/blynk-webhook', async (req, res) => {
   try {
+    const missing = missingEnvironment();
+    if (missing.length > 0) {
+      return res.status(503).json({
+        error: 'Bridge is not fully configured',
+        missing
+      });
+    }
+
     const secret = req.get('x-webhook-secret');
     if (!secret || secret !== process.env.WEBHOOK_SECRET) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -138,5 +190,9 @@ app.post('/blynk-webhook', async (req, res) => {
 });
 
 app.listen(PORT, () => {
+  const missing = missingEnvironment();
   console.log(`OpenAI-Blynk bridge listening on port ${PORT}`);
+  if (missing.length > 0) {
+    console.warn(`Bridge is not ready. Missing: ${missing.join(', ')}`);
+  }
 });
