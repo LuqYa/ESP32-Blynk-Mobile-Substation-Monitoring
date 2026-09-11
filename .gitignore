@@ -1,11 +1,16 @@
 # Local credentials
 firmware/secrets.h
 secrets.h
+.env
+**/.env
 
 # Arduino / PlatformIO build output
 build/
 .pio/
 .vscode/
+
+# Node.js
+node_modules/
 
 # OS files
 .DS_Store
