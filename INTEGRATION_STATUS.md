@@ -16,7 +16,7 @@ GitHub is the source of truth for the ESP32 firmware, Blynk setup documentation,
 
 Firmware CI status: PASS
 
-The repository now includes `.github/workflows/firmware-build.yml`, which installs Arduino CLI, the ESP32 core, Blynk, DHT sensor library, Adafruit Unified Sensor and PZEM004Tv30, then compiles the firmware automatically.
+The repository includes `.github/workflows/firmware-build.yml`, which installs Arduino CLI, the ESP32 core, Blynk, DHT sensor library, Adafruit Unified Sensor and PZEM004Tv30, then compiles the firmware automatically.
 
 Latest verified build used:
 
@@ -26,9 +26,18 @@ Latest verified build used:
 - Adafruit Unified Sensor 1.1.15
 - PZEM004Tv30 1.2.1
 
+Cloud bridge CI status: PASS
+
+The repository also includes `.github/workflows/render-bridge-test.yml`. The first live integration run passed successfully and verified:
+
+- `GET /health` returns a healthy direct-ESP32 bridge response.
+- `POST /esp32-analyse` accepts a simulated WARNING condition.
+- `POST /esp32-analyse` accepts a simulated CRITICAL condition.
+- Render returns the firmware contract lines `SUMMARY:`, `ACTION:` and `MODE:RULE`.
+
 ## 2. Render
 
-Status: DEPLOYED AND LIVE
+Status: DEPLOYED, LIVE, AND CLOUD-TESTED
 
 Service:
 
@@ -114,7 +123,7 @@ This mode is optional and is no longer required for the normal FYP demonstration
 
 ## 7. Remaining Physical/Account Actions
 
-The firmware now compiles successfully in GitHub Actions and the Render bridge is live. To operate the physical prototype, the remaining actions are:
+The firmware compiles successfully in GitHub Actions and the live Render endpoint passes automated WARNING and CRITICAL integration tests. To operate the physical prototype, the remaining actions are:
 
 1. Ensure V0-V12 exist in the Blynk template.
 2. Keep Wi-Fi and Blynk credentials only in local `firmware/secrets.h`.
