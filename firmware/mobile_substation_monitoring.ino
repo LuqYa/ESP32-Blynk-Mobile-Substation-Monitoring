@@ -30,7 +30,7 @@ const char *BRIDGE_URL = "https://openai-blynk-bridge.onrender.com/esp32-analyse
 const unsigned long BRIDGE_REFRESH_MS = 60000UL;
 unsigned long lastBridgeCall = 0;
 String lastBridgeTrigger = "";
-bool lastAnomalyState = false;
+bool lastAbnormalState = false;
 
 // ----------------------------
 // Prototype thresholds
@@ -285,7 +285,7 @@ void requestRenderAdvisory(const Sample &sample, const TrendResult &trend, const
     Serial.println(action);
   } else {
     Serial.printf("Render bridge HTTP error: %d\n", httpCode);
-    Blynk.virtualWrite(V11, "Render advisory unavailable; ESP32 local anomaly result remains active.");
+    Blynk.virtualWrite(V11, "Render advisory unavailable; ESP32 local condition result remains active.");
     Blynk.virtualWrite(V12, "Verify the flagged parameter manually with the laboratory reference instrument.");
   }
 
@@ -293,11 +293,12 @@ void requestRenderAdvisory(const Sample &sample, const TrendResult &trend, const
 }
 
 void handleBridgeAdvisory(const Sample &sample, const TrendResult &trend, const ConditionResult &condition) {
+  bool abnormal = trend.anomaly || condition.level != "NORMAL";
   String triggerKey = trend.message + "|" + condition.level + "|" + condition.reason;
   unsigned long now = millis();
 
-  if (trend.anomaly) {
-    bool newEvent = !lastAnomalyState || triggerKey != lastBridgeTrigger;
+  if (abnormal) {
+    bool newEvent = !lastAbnormalState || triggerKey != lastBridgeTrigger;
     bool refreshDue = (now - lastBridgeCall) >= BRIDGE_REFRESH_MS;
 
     if (newEvent || refreshDue) {
@@ -305,13 +306,13 @@ void handleBridgeAdvisory(const Sample &sample, const TrendResult &trend, const 
       lastBridgeCall = now;
       lastBridgeTrigger = triggerKey;
     }
-  } else if (lastAnomalyState) {
-    Blynk.virtualWrite(V11, "No active trend anomaly. ESP32 threshold and trend monitoring continue locally.");
+  } else if (lastAbnormalState) {
+    Blynk.virtualWrite(V11, "No active abnormal condition. ESP32 threshold and trend monitoring continue locally.");
     Blynk.virtualWrite(V12, "Continue monitoring and record baseline data for threshold validation.");
     lastBridgeTrigger = "";
   }
 
-  lastAnomalyState = trend.anomaly;
+  lastAbnormalState = abnormal;
 }
 
 void sendSensorData() {
@@ -383,6 +384,7 @@ void sendSensorData() {
   Blynk.virtualWrite(V10, condition.reason);
 
   // Direct integration: ESP32 -> Render -> ESP32 -> Blynk V11/V12.
+  // Triggered for WARNING, CRITICAL, sensor faults, or trend anomalies.
   handleBridgeAdvisory(sample, trend, condition);
 
   // Store only after trend comparison so the current reading is not compared with itself.
