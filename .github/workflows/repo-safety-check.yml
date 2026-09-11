@@ -1,0 +1,41 @@
+name: Repository Safety Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  secret-files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fail if private credential files are tracked
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          forbidden_regex='(^|/)secrets\.h$|(^|/)\.env$'
+          tracked="$(git ls-files)"
+
+          if printf '%s\n' "$tracked" | grep -E "$forbidden_regex"; then
+            echo 'ERROR: A private credential file is tracked by Git.'
+            echo 'Keep secrets.h and .env files local only.'
+            exit 1
+          fi
+
+          echo 'PASS: no tracked secrets.h or .env files found.'
+
+      - name: Check for obvious OpenAI secret-key pattern
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git grep -nE 'sk-[A-Za-z0-9_-]{20,}' -- . ':!*.md' ':!*.example' ':!*.example.*'; then
+            echo 'ERROR: possible OpenAI secret key found in tracked source.'
+            exit 1
+          fi
+
+          echo 'PASS: no obvious OpenAI secret-key pattern found.'
