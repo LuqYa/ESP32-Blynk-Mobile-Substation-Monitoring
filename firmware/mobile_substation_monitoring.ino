@@ -1,5 +1,7 @@
 #include "secrets.h"
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <BlynkSimpleEsp32.h>
 #include <DHT.h>
 #include <PZEM004Tv30.h>
@@ -19,6 +21,16 @@
 DHT dht(DHTPIN, DHTTYPE);
 PZEM004Tv30 pzem(PZEM_SERIAL, PZEM_RX_PIN, PZEM_TX_PIN);
 BlynkTimer timer;
+
+// ----------------------------
+// Render bridge configuration
+// ----------------------------
+// Public service URL is safe to keep in source control.
+const char *BRIDGE_URL = "https://openai-blynk-bridge.onrender.com/esp32-analyse";
+const unsigned long BRIDGE_REFRESH_MS = 60000UL;
+unsigned long lastBridgeCall = 0;
+String lastBridgeTrigger = "";
+bool lastAnomalyState = false;
 
 // ----------------------------
 // Prototype thresholds
@@ -185,6 +197,123 @@ void storeSample(const Sample &sample) {
   if (historyCount < HISTORY_SIZE) historyCount++;
 }
 
+String jsonEscape(const String &input) {
+  String out = "";
+  out.reserve(input.length() + 8);
+  for (size_t i = 0; i < input.length(); i++) {
+    char c = input.charAt(i);
+    if (c == '\\' || c == '"') out += '\\';
+    if (c == '\n' || c == '\r') {
+      out += ' ';
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+String jsonNumber(float value, bool valid, uint8_t decimals) {
+  if (!valid || isnan(value)) return "null";
+  return String(value, decimals);
+}
+
+String responseLine(const String &body, const String &label) {
+  int start = body.indexOf(label);
+  if (start < 0) return "";
+  start += label.length();
+  int end = body.indexOf('\n', start);
+  if (end < 0) end = body.length();
+  String value = body.substring(start, end);
+  value.trim();
+  return value;
+}
+
+void requestRenderAdvisory(const Sample &sample, const TrendResult &trend, const ConditionResult &condition) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Render bridge: Wi-Fi unavailable");
+    Blynk.virtualWrite(V11, "Advisory unavailable: Wi-Fi disconnected");
+    Blynk.virtualWrite(V12, "Use the ESP32 local condition result and verify the flagged parameter manually.");
+    return;
+  }
+
+  WiFiClientSecure client;
+  // Laboratory prototype shortcut. For production, pin/validate the server certificate.
+  client.setInsecure();
+
+  HTTPClient https;
+  https.setTimeout(10000);
+
+  if (!https.begin(client, BRIDGE_URL)) {
+    Serial.println("Render bridge: HTTPS initialization failed");
+    return;
+  }
+
+  https.addHeader("Content-Type", "application/json");
+#ifdef BRIDGE_SHARED_SECRET
+  https.addHeader("X-Bridge-Secret", BRIDGE_SHARED_SECRET);
+#endif
+
+  String payload = "{";
+  payload += "\"temperature\":" + jsonNumber(sample.temperature, sample.dhtValid, 1) + ",";
+  payload += "\"humidity\":" + jsonNumber(sample.humidity, sample.dhtValid, 1) + ",";
+  payload += "\"voltage\":" + jsonNumber(sample.voltage, sample.pzemValid, 1) + ",";
+  payload += "\"current\":" + jsonNumber(sample.current, sample.pzemValid, 3) + ",";
+  payload += "\"condition\":\"" + jsonEscape(condition.level) + "\",";
+  payload += "\"trend\":\"" + jsonEscape(trend.message) + "\",";
+  payload += "\"reason\":\"" + jsonEscape(condition.reason) + "\"";
+  payload += "}";
+
+  int httpCode = https.POST(payload);
+
+  if (httpCode == HTTP_CODE_OK) {
+    String body = https.getString();
+    String summary = responseLine(body, "SUMMARY:");
+    String action = responseLine(body, "ACTION:");
+    String mode = responseLine(body, "MODE:");
+
+    if (summary.length() == 0) summary = "Render returned an empty advisory summary.";
+    if (action.length() == 0) action = "Verify the flagged parameter using a laboratory reference instrument.";
+
+    Blynk.virtualWrite(V11, summary);
+    Blynk.virtualWrite(V12, action);
+
+    Serial.print("Render mode  : ");
+    Serial.println(mode);
+    Serial.print("AI/Advisory : ");
+    Serial.println(summary);
+    Serial.print("Next check   : ");
+    Serial.println(action);
+  } else {
+    Serial.printf("Render bridge HTTP error: %d\n", httpCode);
+    Blynk.virtualWrite(V11, "Render advisory unavailable; ESP32 local anomaly result remains active.");
+    Blynk.virtualWrite(V12, "Verify the flagged parameter manually with the laboratory reference instrument.");
+  }
+
+  https.end();
+}
+
+void handleBridgeAdvisory(const Sample &sample, const TrendResult &trend, const ConditionResult &condition) {
+  String triggerKey = trend.message + "|" + condition.level + "|" + condition.reason;
+  unsigned long now = millis();
+
+  if (trend.anomaly) {
+    bool newEvent = !lastAnomalyState || triggerKey != lastBridgeTrigger;
+    bool refreshDue = (now - lastBridgeCall) >= BRIDGE_REFRESH_MS;
+
+    if (newEvent || refreshDue) {
+      requestRenderAdvisory(sample, trend, condition);
+      lastBridgeCall = now;
+      lastBridgeTrigger = triggerKey;
+    }
+  } else if (lastAnomalyState) {
+    Blynk.virtualWrite(V11, "No active trend anomaly. ESP32 threshold and trend monitoring continue locally.");
+    Blynk.virtualWrite(V12, "Continue monitoring and record baseline data for threshold validation.");
+    lastBridgeTrigger = "";
+  }
+
+  lastAnomalyState = trend.anomaly;
+}
+
 void sendSensorData() {
   Sample sample;
 
@@ -234,7 +363,7 @@ void sendSensorData() {
   Serial.print("Reason      : ");
   Serial.println(condition.reason);
 
-  // Blynk datastreams
+  // Blynk datastreams from ESP32
   if (sample.dhtValid) {
     Blynk.virtualWrite(V0, sample.temperature);
     Blynk.virtualWrite(V1, sample.humidity);
@@ -252,6 +381,9 @@ void sendSensorData() {
   Blynk.virtualWrite(V8, trend.message);
   Blynk.virtualWrite(V9, trend.anomaly ? 1 : 0);
   Blynk.virtualWrite(V10, condition.reason);
+
+  // Direct integration: ESP32 -> Render -> ESP32 -> Blynk V11/V12.
+  handleBridgeAdvisory(sample, trend, condition);
 
   // Store only after trend comparison so the current reading is not compared with itself.
   storeSample(sample);
