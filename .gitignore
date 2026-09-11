@@ -1,0 +1,12 @@
+# Local credentials
+firmware/secrets.h
+secrets.h
+
+# Arduino / PlatformIO build output
+build/
+.pio/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
