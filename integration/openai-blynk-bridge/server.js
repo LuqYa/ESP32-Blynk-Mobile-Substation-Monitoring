@@ -6,20 +6,128 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '64kb' }));
 
-const REQUIRED_ENV = ['BLYNK_DEVICE_TOKEN', 'WEBHOOK_SECRET'];
 const BLYNK_SERVER = (process.env.BLYNK_SERVER || 'https://blynk.cloud').replace(/\/$/, '');
 const MODEL = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
 const PORT = Number(process.env.PORT || 3000);
-
-function missingEnvironment() {
-  return REQUIRED_ENV.filter((key) => !process.env[key]);
-}
 
 function clip(value, max = 220) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
+function extractLine(text, label) {
+  const regex = new RegExp(`^${label}:\\s*(.+)$`, 'im');
+  const match = text.match(regex);
+  return match ? clip(match[1], 180) : '';
+}
+
+function ruleBasedAdvisory(values = {}) {
+  const condition = String(values.condition || values.v4 || '').toUpperCase();
+  const trend = String(values.trend || values.v8 || '');
+  const reason = String(values.reason || values.v10 || '');
+  const combined = `${trend} ${reason}`.toLowerCase();
+
+  if (condition === 'CRITICAL') {
+    return {
+      summary: `Critical prototype condition reported: ${clip(reason || trend || 'critical threshold exceeded', 145)}.`,
+      action: 'Stop the laboratory test stimulus safely and verify the flagged sensor value with a reference instrument before continuing.',
+      mode: 'RULE'
+    };
+  }
+
+  if (combined.includes('temperature')) {
+    return {
+      summary: 'Temperature-related abnormal trend detected by the ESP32 prototype logic.',
+      action: 'Verify DHT11 temperature with a reference thermometer and inspect the laboratory heat source and ventilation.',
+      mode: 'RULE'
+    };
+  }
+
+  if (combined.includes('humidity')) {
+    return {
+      summary: 'Humidity-related abnormal trend detected by the ESP32 prototype logic.',
+      action: 'Verify DHT11 humidity against a reference meter and inspect the controlled laboratory environment.',
+      mode: 'RULE'
+    };
+  }
+
+  if (combined.includes('voltage')) {
+    return {
+      summary: 'Voltage-related abnormal condition detected by the ESP32 prototype logic.',
+      action: 'Check the safe laboratory supply and compare the PZEM voltage reading with a suitable reference meter.',
+      mode: 'RULE'
+    };
+  }
+
+  if (combined.includes('current')) {
+    return {
+      summary: 'Current-related abnormal condition detected by the ESP32 prototype logic.',
+      action: 'Check the laboratory load and CT arrangement, then compare the current reading with a suitable reference instrument.',
+      mode: 'RULE'
+    };
+  }
+
+  return {
+    summary: clip(reason || trend || 'Abnormal prototype condition reported by the ESP32 monitoring logic.', 180),
+    action: 'Verify the flagged parameter using the laboratory reference instrument and record the result before continuing the test.',
+    mode: 'RULE'
+  };
+}
+
+async function aiAdvisory(values) {
+  const fallback = ruleBasedAdvisory(values);
+  const expectedSecret = process.env.BRIDGE_SHARED_SECRET;
+  const suppliedSecret = String(values.__bridgeSecret || '');
+
+  // OpenAI is used only when both a server-side shared secret and API key are configured.
+  // Otherwise the bridge deliberately stays in rule-based fallback mode.
+  if (!process.env.OPENAI_API_KEY || !expectedSecret || suppliedSecret !== expectedSecret) {
+    return fallback;
+  }
+
+  const input = `
+You are assisting with a university laboratory prototype for condition monitoring of a 33/11 kV mobile substation.
+This is NOT a live protection or switching system. Give monitoring interpretation and safe laboratory checks only.
+Do not tell the system to trip, energise, isolate, switch, or control high-voltage equipment.
+
+Measurements and ESP32 results:
+Temperature: ${values.temperature ?? values.v0 ?? 'N/A'} C
+Humidity: ${values.humidity ?? values.v1 ?? 'N/A'} %RH
+Voltage: ${values.voltage ?? values.v2 ?? 'N/A'} V
+Current: ${values.current ?? values.v3 ?? 'N/A'} A
+Condition: ${values.condition ?? values.v4 ?? 'N/A'}
+Trend: ${values.trend ?? values.v8 ?? 'N/A'}
+Reason: ${values.reason ?? values.v10 ?? 'N/A'}
+
+Return exactly two short lines, each under 180 characters:
+SUMMARY: <interpretation>
+ACTION: <safe laboratory check>
+`;
+
+  try {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const response = await openai.responses.create({
+      model: MODEL,
+      input,
+      max_output_tokens: 160
+    });
+
+    const text = response.output_text || '';
+    return {
+      summary: extractLine(text, 'SUMMARY') || fallback.summary,
+      action: extractLine(text, 'ACTION') || fallback.action,
+      mode: 'AI'
+    };
+  } catch (error) {
+    console.error('OpenAI advisory failed; using rule fallback:', error.message);
+    return fallback;
+  }
+}
+
 async function getBlynkValues() {
+  if (!process.env.BLYNK_DEVICE_TOKEN) {
+    throw new Error('BLYNK_DEVICE_TOKEN is not configured');
+  }
+
   const url = new URL(`${BLYNK_SERVER}/external/api/getAll`);
   url.searchParams.set('token', process.env.BLYNK_DEVICE_TOKEN);
 
@@ -31,6 +139,10 @@ async function getBlynkValues() {
 }
 
 async function updateBlynk(pin, value) {
+  if (!process.env.BLYNK_DEVICE_TOKEN) {
+    throw new Error('BLYNK_DEVICE_TOKEN is not configured');
+  }
+
   const url = new URL(`${BLYNK_SERVER}/external/api/update`);
   url.searchParams.set('token', process.env.BLYNK_DEVICE_TOKEN);
   url.searchParams.set(String(pin).toLowerCase(), clip(value));
@@ -41,131 +153,57 @@ async function updateBlynk(pin, value) {
   }
 }
 
-function extractLine(text, label) {
-  const regex = new RegExp(`^${label}:\\s*(.+)$`, 'im');
-  const match = text.match(regex);
-  return match ? match[1].trim() : '';
-}
-
-function fallbackAdvisory(values) {
-  const condition = String(values.v4 ?? 'UNKNOWN').toUpperCase();
-  const anomaly = clip(values.v8 ?? 'No anomaly message available', 160);
-  const reason = clip(values.v10 ?? 'No condition reason available', 160);
-
-  if (condition === 'CRITICAL') {
-    return {
-      summary: `CRITICAL prototype condition. ${reason}`,
-      action: 'Stop the laboratory test if unsafe and verify the flagged sensor/parameter with a reference instrument.'
-    };
-  }
-
-  if (condition === 'WARNING' || String(values.v9 ?? '0') === '1') {
-    return {
-      summary: `WARNING/anomaly detected. ${anomaly}`,
-      action: 'Verify the flagged reading, sensor connection and recent trend before continuing the laboratory test.'
-    };
-  }
-
-  return {
-    summary: 'No active anomaly. Current prototype values are within the configured monitoring rules.',
-    action: 'Continue monitoring and record baseline data for threshold validation.'
-  };
-}
-
-async function openAIAdvisory(values) {
-  if (!process.env.OPENAI_API_KEY) return null;
-
-  const input = `
-You are assisting with a university laboratory prototype for condition monitoring of a 33/11 kV mobile substation.
-
-Constraints:
-- Laboratory prototype only; not a protection or control system.
-- Do not instruct operation, tripping, energising, isolation or switching of high-voltage equipment.
-- Give only monitoring interpretation and safe laboratory checks.
-- Thresholds and anomaly flags are generated by the ESP32 firmware.
-
-Current Blynk values:
-Temperature V0: ${values.v0 ?? 'N/A'} C
-Humidity V1: ${values.v1 ?? 'N/A'} %RH
-Voltage V2: ${values.v2 ?? 'N/A'} V
-Current V3: ${values.v3 ?? 'N/A'} A
-Overall condition V4: ${values.v4 ?? 'N/A'}
-Power V5: ${values.v5 ?? 'N/A'} W
-Frequency V6: ${values.v6 ?? 'N/A'} Hz
-Power factor V7: ${values.v7 ?? 'N/A'}
-Anomaly message V8: ${values.v8 ?? 'N/A'}
-Anomaly flag V9: ${values.v9 ?? 'N/A'}
-Condition reason V10: ${values.v10 ?? 'N/A'}
-
-Return exactly two short lines under 180 characters each:
-SUMMARY: <interpretation>
-ACTION: <safe laboratory check>
-`;
-
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const response = await openai.responses.create({
-    model: MODEL,
-    input,
-    max_output_tokens: 160
-  });
-
-  const text = response.output_text || '';
-  return {
-    summary: extractLine(text, 'SUMMARY') || clip(text),
-    action: extractLine(text, 'ACTION') || 'Verify the flagged parameter with the laboratory reference instrument.'
-  };
-}
-
-async function analysePrototype(values) {
-  try {
-    const ai = await openAIAdvisory(values);
-    if (ai) return { ...ai, source: 'openai' };
-  } catch (error) {
-    console.error(`OpenAI advisory failed; using fallback: ${error.message}`);
-  }
-  return { ...fallbackAdvisory(values), source: 'rule-fallback' };
-}
-
-app.get('/', (req, res) => {
-  res.json({
-    service: 'blynk-render-bridge',
-    endpoints: ['/health', '/ready', '/blynk-webhook'],
-    openaiOptional: true
-  });
-});
-
 app.get('/health', (req, res) => {
-  const missing = missingEnvironment();
   res.set('Cache-Control', 'no-store');
   res.json({
     ok: true,
     service: 'blynk-render-bridge',
-    configured: missing.length === 0,
-    missing,
-    openaiConfigured: Boolean(process.env.OPENAI_API_KEY)
+    directEsp32Mode: true,
+    legacyWebhookMode: Boolean(process.env.BLYNK_DEVICE_TOKEN && process.env.WEBHOOK_SECRET),
+    aiModeAvailable: Boolean(process.env.OPENAI_API_KEY && process.env.BRIDGE_SHARED_SECRET)
   });
 });
 
 app.get('/ready', (req, res) => {
-  const missing = missingEnvironment();
   res.set('Cache-Control', 'no-store');
-
-  if (missing.length > 0) {
-    return res.status(503).json({ ready: false, missing });
-  }
-
   res.json({
     ready: true,
-    blynkServer: BLYNK_SERVER,
-    advisoryMode: process.env.OPENAI_API_KEY ? `OpenAI (${MODEL}) with fallback` : 'rule-based fallback'
+    directEsp32Mode: true,
+    model: MODEL,
+    legacyWebhookReady: Boolean(process.env.BLYNK_DEVICE_TOKEN && process.env.WEBHOOK_SECRET)
   });
 });
 
+// Default integration path: ESP32 -> Render -> ESP32 -> Blynk V11/V12.
+// No Blynk Device Token is required on Render for this mode.
+app.post('/esp32-analyse', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const suppliedSecret = req.get('x-bridge-secret') || '';
+    const advisory = await aiAdvisory({ ...body, __bridgeSecret: suppliedSecret });
+
+    res.type('text/plain').send(
+      `SUMMARY:${clip(advisory.summary, 180)}\n` +
+      `ACTION:${clip(advisory.action, 180)}\n` +
+      `MODE:${advisory.mode}`
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).type('text/plain').send(
+      'SUMMARY:Bridge processing error.\n' +
+      'ACTION:Continue using the ESP32 local condition result and verify the prototype manually.\n' +
+      'MODE:ERROR'
+    );
+  }
+});
+
+// Legacy optional path: Blynk V9 webhook -> Render -> Blynk V11/V12.
 app.post('/blynk-webhook', async (req, res) => {
   try {
-    const missing = missingEnvironment();
-    if (missing.length > 0) {
-      return res.status(503).json({ error: 'Bridge is not fully configured', missing });
+    if (!process.env.BLYNK_DEVICE_TOKEN || !process.env.WEBHOOK_SECRET) {
+      return res.status(503).json({
+        error: 'Legacy webhook mode is not configured. Use /esp32-analyse for the default integration.'
+      });
     }
 
     const secret = req.get('x-webhook-secret');
@@ -177,23 +215,29 @@ app.post('/blynk-webhook', async (req, res) => {
     const value = String(req.body.value ?? '');
 
     if (pin && pin !== 'V9') {
-      return res.json({ ok: true, skipped: true, reason: 'Webhook is configured for V9 only.' });
+      return res.json({ ok: true, skipped: true, reason: 'Webhook is intended for V9.' });
+    }
+
+    if (value === '0') {
+      await Promise.all([
+        updateBlynk('V11', 'No active anomaly. ESP32 threshold and trend checks are within the current prototype rules.'),
+        updateBlynk('V12', 'Continue monitoring and record baseline data for threshold validation.')
+      ]);
+      return res.json({ ok: true, analysed: false, condition: 'normal' });
     }
 
     const values = await getBlynkValues();
-    const advisory = await analysePrototype(values);
+    const advisory = await aiAdvisory({
+      ...values,
+      __bridgeSecret: req.get('x-bridge-secret') || ''
+    });
 
     await Promise.all([
       updateBlynk('V11', advisory.summary),
       updateBlynk('V12', advisory.action)
     ]);
 
-    res.json({
-      ok: true,
-      analysed: true,
-      triggerValue: value,
-      advisorySource: advisory.source
-    });
+    res.json({ ok: true, analysed: true, mode: advisory.mode });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Bridge processing failed' });
@@ -201,8 +245,12 @@ app.post('/blynk-webhook', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  const missing = missingEnvironment();
   console.log(`Blynk-Render bridge listening on port ${PORT}`);
-  if (missing.length > 0) console.warn(`Bridge is not ready. Missing: ${missing.join(', ')}`);
-  if (!process.env.OPENAI_API_KEY) console.log('OPENAI_API_KEY not set: rule-based advisory fallback is active.');
+  console.log('Default integration: ESP32 -> /esp32-analyse -> ESP32 -> Blynk V11/V12');
+  if (!process.env.OPENAI_API_KEY) {
+    console.log('OPENAI_API_KEY not set: rule-based advisory fallback is active.');
+  }
+  if (!process.env.BLYNK_DEVICE_TOKEN) {
+    console.log('BLYNK_DEVICE_TOKEN not set: legacy Blynk webhook mode is disabled; direct ESP32 mode remains active.');
+  }
 });
