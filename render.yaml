@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: openai-blynk-bridge
+    runtime: node
+    plan: free
+    rootDir: integration/openai-blynk-bridge
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BLYNK_DEVICE_TOKEN
+        sync: false
+      - key: BLYNK_SERVER
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
