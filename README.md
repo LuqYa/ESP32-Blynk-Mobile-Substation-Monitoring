@@ -1,5 +1,8 @@
 # ESP32-Blynk Mobile Substation Monitoring
 
+[![ESP32 Firmware Build](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/firmware-build.yml/badge.svg)](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/firmware-build.yml)
+[![Render Bridge Integration Test](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/render-bridge-test.yml/badge.svg)](https://github.com/LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring/actions/workflows/render-bridge-test.yml)
+
 Laboratory-scale IoT condition monitoring prototype for a 33/11 kV mobile substation using ESP32, Blynk, DHT11 and PZEM-004T.
 
 ## Connected Architecture
@@ -12,7 +15,7 @@ DHT11 + PZEM-004T
         |
         +---------------------> Blynk V0-V10
         |
-        | anomaly detected
+        | abnormal condition
         v
       Render
  /esp32-analyse
@@ -33,6 +36,17 @@ GitHub main branch
 The ESP32 remains responsible for threshold checking, trend analysis, rule-based anomaly detection, and Normal/Warning/Critical classification. Render is an advisory layer only.
 
 OpenAI is optional. Without an OpenAI API key, Render uses deterministic rule-based advisory output, so the default FYP demonstration remains functional.
+
+## Verified Automation Status
+
+- ESP32 firmware compile: PASS
+- Render health test: PASS
+- Temperature warning advisory test: PASS
+- Humidity warning advisory test: PASS
+- Voltage warning advisory test: PASS
+- Current warning advisory test: PASS
+- Sensor-fault advisory test: PASS
+- Critical-condition advisory test: PASS
 
 ## Current Render Service
 
@@ -61,7 +75,7 @@ Legacy optional webhook endpoint:
 | V6 | Frequency | ESP32 |
 | V7 | Power Factor | ESP32 |
 | V8 | Anomaly Message | ESP32 |
-| V9 | Anomaly Flag | ESP32 |
+| V9 | Trend Anomaly Flag | ESP32 |
 | V10 | Condition Reason | ESP32 |
 | V11 | Advisory Summary | ESP32 after Render response |
 | V12 | Recommended Check | ESP32 after Render response |
@@ -84,7 +98,16 @@ Never commit the real values to GitHub.
 
 No Blynk webhook and no Blynk Device Token on Render are required for the default setup.
 
-When V9 reports a trend anomaly, the ESP32 sends the current prototype measurements and condition result to:
+The ESP32 requests a Render advisory when any monitored abnormal condition is active, including:
+
+- threshold WARNING
+- threshold CRITICAL
+- sensor communication/read fault
+- trend anomaly
+
+V9 remains specifically the trend-anomaly flag, so a threshold WARNING/CRITICAL may request Render advisory even when V9 is 0.
+
+The ESP32 sends the current prototype measurements and condition result to:
 
 `https://openai-blynk-bridge.onrender.com/esp32-analyse`
 
@@ -127,6 +150,7 @@ The previous V9 webhook integration is retained only as an optional alternative.
 
 ## Main Files
 
+- `firmware/firmware.ino` — Arduino sketch entry point
 - `firmware/mobile_substation_monitoring.ino` — ESP32 firmware and direct Render integration
 - `firmware/secrets.example.h` — local credential template
 - `blynk/dashboard_setup.md` — Blynk datastream/dashboard setup
@@ -134,6 +158,7 @@ The previous V9 webhook integration is retained only as an optional alternative.
 - `integration/openai-blynk-bridge/README.md` — integration guide
 - `render.yaml` — Render deployment definition
 - `testing/test_procedure.md` — formal test procedure
+- `testing/direct_render_blynk_test.md` — direct integration test sequence
 - `testing/test_results.csv` — real test-result template
 - `INTEGRATION_STATUS.md` — integration checklist
 
