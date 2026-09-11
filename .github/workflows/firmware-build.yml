@@ -1,0 +1,56 @@
+name: ESP32 Firmware Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "firmware/**"
+      - ".github/workflows/firmware-build.yml"
+  pull_request:
+    paths:
+      - "firmware/**"
+      - ".github/workflows/firmware-build.yml"
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: "1.x"
+
+      - name: Configure ESP32 board package
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install Arduino libraries
+        run: |
+          arduino-cli lib update-index
+          arduino-cli lib install "Blynk"
+          arduino-cli lib install "DHT sensor library"
+          arduino-cli lib install "Adafruit Unified Sensor"
+          arduino-cli lib install "PZEM004Tv30"
+
+      - name: Create CI-only secrets header
+        run: |
+          cat > firmware/secrets.h <<'EOF'
+          #pragma once
+          #define WIFI_SSID "CI_WIFI"
+          #define WIFI_PASSWORD "CI_PASSWORD"
+          #define BLYNK_AUTH_TOKEN "CI_BLYNK_TOKEN"
+          #define BLYNK_TEMPLATE_ID "CI_TEMPLATE_ID"
+          #define BLYNK_TEMPLATE_NAME "Mobile Substation Monitoring"
+          EOF
+
+      - name: Compile ESP32 firmware
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 firmware
