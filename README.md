@@ -10,43 +10,47 @@ DHT11 + PZEM-004T
         v
       ESP32
         |
-        | Wi-Fi
-        v
-      Blynk
-   V0 ... V10
+        +---------------------> Blynk V0-V10
         |
-        | V9 webhook
+        | anomaly detected
         v
       Render
+ /esp32-analyse
         |
-        | advisory result
+        | SUMMARY / ACTION
+        v
+      ESP32
+        |
         v
    Blynk V11/V12
 
 GitHub main branch
         |
-        | auto-deploy
         v
-      Render
+   Render deployment
 ```
 
-The ESP32 remains responsible for the core monitoring logic: threshold checking, trend analysis, rule-based anomaly detection and Normal/Warning/Critical classification. Render is an integration/advisory layer. OpenAI is optional; if it is unavailable, Render uses a rule-based advisory fallback.
+The ESP32 remains responsible for threshold checking, trend analysis, rule-based anomaly detection, and Normal/Warning/Critical classification. Render is an advisory layer only.
+
+OpenAI is optional. Without an OpenAI API key, Render uses deterministic rule-based advisory output, so the default FYP demonstration remains functional.
 
 ## Current Render Service
 
 ```text
 Service: openai-blynk-bridge
 URL: https://openai-blynk-bridge.onrender.com
-Webhook: https://openai-blynk-bridge.onrender.com/blynk-webhook
+Direct ESP32 endpoint: https://openai-blynk-bridge.onrender.com/esp32-analyse
 Health: https://openai-blynk-bridge.onrender.com/health
 Ready: https://openai-blynk-bridge.onrender.com/ready
 ```
 
-GitHub auto-deploy is enabled for the `main` branch.
+Legacy optional webhook endpoint:
+
+`https://openai-blynk-bridge.onrender.com/blynk-webhook`
 
 ## Blynk Datastream Map
 
-| Pin | Parameter | Source |
+| Pin | Parameter | Written By |
 |---|---|---|
 | V0 | Temperature | ESP32 |
 | V1 | Humidity | ESP32 |
@@ -59,12 +63,12 @@ GitHub auto-deploy is enabled for the `main` branch.
 | V8 | Anomaly Message | ESP32 |
 | V9 | Anomaly Flag | ESP32 |
 | V10 | Condition Reason | ESP32 |
-| V11 | Advisory Summary | Render |
-| V12 | Recommended Check | Render |
+| V11 | Advisory Summary | ESP32 after Render response |
+| V12 | Recommended Check | ESP32 after Render response |
 
-## Required Private Configuration
+## Required Private ESP32 Configuration
 
-### ESP32 local `firmware/secrets.h`
+Create `firmware/secrets.h` locally from `firmware/secrets.example.h` and provide:
 
 ```text
 WIFI_SSID
@@ -74,53 +78,44 @@ BLYNK_TEMPLATE_ID
 BLYNK_TEMPLATE_NAME
 ```
 
-### Render Environment
+Never commit the real values to GitHub.
 
-Required:
+## Default Integration
 
-```text
-BLYNK_SERVER
-BLYNK_DEVICE_TOKEN
-WEBHOOK_SECRET
-```
+No Blynk webhook and no Blynk Device Token on Render are required for the default setup.
 
-Optional AI upgrade:
+When V9 reports a trend anomaly, the ESP32 sends the current prototype measurements and condition result to:
 
-```text
-OPENAI_API_KEY
-OPENAI_MODEL
-```
+`https://openai-blynk-bridge.onrender.com/esp32-analyse`
 
-Never commit real passwords, tokens, API keys or webhook secrets to GitHub.
-
-## Blynk Webhook
-
-Create a Blynk webhook using:
+Render returns:
 
 ```text
-Trigger: Device Datastream Update
-Device: FYP Mobile Substation Prototype
-Datastream: V9 - Anomaly Flag
-Method: POST
-URL: https://openai-blynk-bridge.onrender.com/blynk-webhook
+SUMMARY:<short interpretation>
+ACTION:<safe laboratory check>
+MODE:RULE or AI
 ```
 
-Header:
+The ESP32 then writes SUMMARY to V11 and ACTION to V12.
+
+## Optional OpenAI Upgrade
+
+Rule mode works without OpenAI.
+
+To enable optional AI advisory later, configure:
 
 ```text
-X-Webhook-Secret: <same WEBHOOK_SECRET stored in Render>
+OPENAI_API_KEY in Render
+BRIDGE_SHARED_SECRET in Render
 ```
 
-Body:
+and define the same `BRIDGE_SHARED_SECRET` locally in `firmware/secrets.h`.
 
-```json
-{
-  "pin": "{device_pin}",
-  "value": "{device_pinValue}",
-  "device": "{device_name}",
-  "timestamp": "{timestamp_iso8601}"
-}
-```
+The OpenAI API key must never be placed in the ESP32 firmware or Blynk.
+
+## Legacy Optional Blynk Webhook
+
+The previous V9 webhook integration is retained only as an optional alternative. It requires `BLYNK_DEVICE_TOKEN`, `WEBHOOK_SECRET`, and Blynk webhook configuration. It is not required for the normal FYP demonstration.
 
 ## Main Hardware
 
@@ -132,7 +127,7 @@ Body:
 
 ## Main Files
 
-- `firmware/mobile_substation_monitoring.ino` — ESP32 firmware
+- `firmware/mobile_substation_monitoring.ino` — ESP32 firmware and direct Render integration
 - `firmware/secrets.example.h` — local credential template
 - `blynk/dashboard_setup.md` — Blynk datastream/dashboard setup
 - `integration/openai-blynk-bridge/server.js` — Render bridge
@@ -140,7 +135,7 @@ Body:
 - `render.yaml` — Render deployment definition
 - `testing/test_procedure.md` — formal test procedure
 - `testing/test_results.csv` — real test-result template
-- `INTEGRATION_STATUS.md` — live integration checklist
+- `INTEGRATION_STATUS.md` — integration checklist
 
 ## Safety
 
