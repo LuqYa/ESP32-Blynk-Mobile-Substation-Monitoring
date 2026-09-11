@@ -28,12 +28,16 @@ Latest verified build used:
 
 Cloud bridge CI status: PASS
 
-The repository also includes `.github/workflows/render-bridge-test.yml`. The first live integration run passed successfully and verified:
+The repository also includes `.github/workflows/render-bridge-test.yml`. The live integration test now verifies:
 
-- `GET /health` returns a healthy direct-ESP32 bridge response.
-- `POST /esp32-analyse` accepts a simulated WARNING condition.
-- `POST /esp32-analyse` accepts a simulated CRITICAL condition.
-- Render returns the firmware contract lines `SUMMARY:`, `ACTION:` and `MODE:RULE`.
+- `GET /health`
+- temperature WARNING advisory
+- humidity WARNING advisory
+- voltage WARNING advisory
+- current WARNING advisory
+- sensor-fault advisory
+- CRITICAL-condition advisory
+- firmware contract lines `SUMMARY:`, `ACTION:` and `MODE:RULE`
 
 ## 2. Render
 
@@ -72,7 +76,7 @@ Required datastreams:
 - V6 Frequency
 - V7 Power Factor
 - V8 Anomaly Message
-- V9 Anomaly Flag
+- V9 Trend Anomaly Flag
 - V10 Condition Reason
 - V11 Advisory Summary
 - V12 Recommended Check
@@ -123,7 +127,7 @@ This mode is optional and is no longer required for the normal FYP demonstration
 
 ## 7. Remaining Physical/Account Actions
 
-The firmware compiles successfully in GitHub Actions and the live Render endpoint passes automated WARNING and CRITICAL integration tests. To operate the physical prototype, the remaining actions are:
+The firmware compiles successfully in GitHub Actions and the live Render endpoint passes automated tests for all main advisory categories. To operate the physical prototype, the remaining actions are:
 
 1. Ensure V0-V12 exist in the Blynk template.
 2. Keep Wi-Fi and Blynk credentials only in local `firmware/secrets.h`.
