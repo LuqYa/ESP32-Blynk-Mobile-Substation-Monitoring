@@ -40,7 +40,7 @@ V11-V12 are written by the ESP32 after it requests an advisory from the Render b
 ### System Status
 
 - Overall Condition -> V4
-- Anomaly Indicator -> V9
+- Trend Anomaly Indicator -> V9
 - Anomaly Message -> V8
 - Condition Reason -> V10
 
@@ -79,12 +79,12 @@ Never commit the Auth Token to GitHub.
 
 ## 5. Default Integration - No Blynk Webhook Required
 
-The default integration is now:
+The default integration is:
 
 ```text
 ESP32 -> Blynk V0-V10
    |
-   +-> Render /esp32-analyse when anomaly occurs
+   +-> Render /esp32-analyse when an abnormal condition is active
            |
            v
       SUMMARY / ACTION
@@ -98,6 +98,15 @@ Render endpoint:
 `https://openai-blynk-bridge.onrender.com/esp32-analyse`
 
 The firmware already contains this public URL.
+
+Render advisory may be requested when the ESP32 detects:
+
+- threshold WARNING
+- threshold CRITICAL
+- DHT11 or PZEM read/communication fault
+- trend anomaly
+
+V9 remains specifically the trend-anomaly flag. A threshold WARNING or CRITICAL can therefore request an advisory even when V9 remains `0`.
 
 For the normal FYP demonstration you do NOT need:
 
@@ -115,13 +124,34 @@ If OpenAI advisory is enabled later, keep the OpenAI API key in Render only and 
 1. Compile and upload the latest firmware.
 2. Confirm ESP32 connects to Wi-Fi and Blynk.
 3. Confirm V0-V10 update.
-4. Wait until the history buffer contains enough samples.
-5. Create a controlled laboratory trend anomaly.
-6. Confirm V9 becomes `1`.
-7. Check Serial Monitor for the Render advisory mode and response.
-8. Confirm V11 shows the advisory summary.
-9. Confirm V12 shows the recommended laboratory check.
+4. Confirm the prototype reaches a stable NORMAL condition.
+5. Run a controlled threshold WARNING test, for example temperature above 35 °C, and confirm V4 becomes `WARNING`.
+6. Confirm Serial Monitor shows the Render response and V11/V12 update, even if V9 remains `0`.
+7. Run a controlled trend-anomaly test after the history buffer has enough samples and confirm V9 becomes `1`.
+8. Confirm V11 shows the advisory summary and V12 shows the recommended laboratory check.
+9. Run a controlled CRITICAL test only within safe laboratory limits and confirm V4 becomes `CRITICAL` and V11/V12 update.
 10. Return the prototype to a normal condition and confirm the advisory status resets.
+11. Record only real measurements and observed results in `testing/test_results.csv`.
+
+## 8. Automated Verification Already Completed
+
+GitHub Actions has verified the live Render bridge for:
+
+- health endpoint
+- temperature warning
+- humidity warning
+- voltage warning
+- current warning
+- sensor fault
+- critical condition
+
+The cloud tests verify that Render returns the exact response contract expected by the ESP32:
+
+```text
+SUMMARY:<short interpretation>
+ACTION:<safe laboratory check>
+MODE:RULE
+```
 
 ## Important Notes
 
