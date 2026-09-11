@@ -77,7 +77,7 @@ Legacy optional webhook endpoint:
 | V5 | Active Power | ESP32 |
 | V6 | Frequency | ESP32 |
 | V7 | Power Factor | ESP32 |
-| V8 | Anomaly Message | ESP32 |
+| V8 | Trend / Anomaly Message | ESP32 |
 | V9 | Trend Anomaly Flag | ESP32 |
 | V10 | Condition Reason | ESP32 |
 | V11 | Advisory Summary | ESP32 after Render response |
@@ -124,6 +124,36 @@ MODE:RULE or AI
 
 The ESP32 then writes SUMMARY to V11 and ACTION to V12.
 
+## Physical Bring-Up Order
+
+Use `testing/physical_bringup_checklist.md` when moving to the real hardware. The intended sequence is:
+
+```text
+ESP32 USB only
+  -> Wi-Fi + Blynk
+  -> DHT11 low-voltage test
+  -> Render advisory test
+  -> verify exact PZEM interface/version
+  -> PZEM communication-side test
+  -> supervised AC measurement test
+  -> formal FYP tests
+```
+
+This order reduces troubleshooting risk and avoids introducing the PZEM/mains side before the low-voltage software path is proven.
+
+## Test Data Rules
+
+`testing/test_results.csv` is aligned with the current firmware:
+
+- V9 is recorded only as the trend-anomaly flag.
+- Threshold-only WARNING/CRITICAL records normally use V9 = 0 after the condition is stabilised.
+- DHT11 and PZEM communication faults are expected as WARNING in the current firmware.
+- V10 records the condition reason.
+- V11/V12 record the Render advisory summary and recommended check.
+- Electrical tests include optional reference voltage/current and percentage-error fields.
+
+Record only real measurements and observations. Do not fabricate missing data.
+
 ## Optional OpenAI Upgrade
 
 Rule mode works without OpenAI.
@@ -157,17 +187,20 @@ The previous V9 webhook integration is retained only as an optional alternative.
 - `firmware/mobile_substation_monitoring.ino` — ESP32 firmware and direct Render integration
 - `firmware/secrets.example.h` — local credential template
 - `blynk/dashboard_setup.md` — Blynk datastream/dashboard setup
+- `hardware/connection_summary.md` — planned low-voltage/PZEM connection summary
 - `integration/openai-blynk-bridge/server.js` — Render bridge
 - `integration/openai-blynk-bridge/README.md` — integration guide
 - `render.yaml` — Render deployment definition
+- `testing/physical_bringup_checklist.md` — staged physical bring-up sequence
 - `testing/test_procedure.md` — formal test procedure
 - `testing/direct_render_blynk_test.md` — direct integration test sequence
+- `testing/data_collection_plan.md` — FYP data collection plan
 - `testing/test_results.csv` — real test-result template
 - `INTEGRATION_STATUS.md` — integration checklist
 
 ## Safety
 
-This is a laboratory-scale prototype. Do not connect prototype wiring directly to energized 33 kV or 11 kV equipment. Use appropriate isolation, protection, supervision and safe laboratory procedures. The advisory layer must not be used as a protection relay, interlock or switching authority.
+This is a laboratory-scale prototype. Do not connect prototype wiring directly to energized 33 kV or 11 kV equipment. Use appropriate isolation, protection, supervision and safe laboratory procedures. Verify the exact PZEM-004T hardware version and its interface requirements before connecting it to the ESP32 or any AC measurement circuit. The advisory layer must not be used as a protection relay, interlock or switching authority.
 
 ## Academic Context
 
