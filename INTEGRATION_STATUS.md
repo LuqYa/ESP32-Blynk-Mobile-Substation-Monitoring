@@ -12,11 +12,11 @@ Branch:
 
 `main`
 
-GitHub is the source of truth for firmware, Blynk setup documentation and the Render bridge code.
+GitHub is the source of truth for the ESP32 firmware, Blynk setup documentation, and Render bridge code.
 
 ## 2. Render
 
-Status: DEPLOYED / LIVE
+Status: DEPLOYED
 
 Service:
 
@@ -26,26 +26,19 @@ Public URL:
 
 `https://openai-blynk-bridge.onrender.com`
 
-Latest rebuilt GitHub commit has been deployed successfully.
+Default ESP32 advisory endpoint:
 
-Render service configuration shows `autoDeploy=yes`, but the latest GitHub commits did not trigger a deploy automatically. The latest version was therefore deployed manually through the Render integration. Native GitHub authorization in Render should be checked if automatic deploys are required for future commits.
+`https://openai-blynk-bridge.onrender.com/esp32-analyse`
 
-Required Render environment variables:
+Health endpoint:
 
-- `BLYNK_SERVER`
-- `BLYNK_DEVICE_TOKEN`
-- `WEBHOOK_SECRET`
+`https://openai-blynk-bridge.onrender.com/health`
 
-Optional:
-
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-
-Current bridge mode without an OpenAI API key: rule-based advisory fallback.
+The default direct integration does NOT require a Blynk Device Token or a Blynk webhook on Render.
 
 ## 3. Blynk
 
-Status: REQUIRES ACCOUNT-SIDE PRIVATE CONFIGURATION
+Status: ESP32 CONNECTION REQUIRED
 
 Required datastreams:
 
@@ -63,44 +56,58 @@ Required datastreams:
 - V11 Advisory Summary
 - V12 Recommended Check
 
-Required webhook:
+V0-V10 are written by the ESP32 monitoring firmware.
+V11-V12 are also written by the ESP32 after it receives an advisory response from Render.
+
+No Blynk webhook is required for the default integration.
+
+## 4. Default End-to-End Flow
 
 ```text
-Trigger: Device Datastream Update
-Datastream: V9
-Method: POST
-URL: https://openai-blynk-bridge.onrender.com/blynk-webhook
-Header: X-Webhook-Secret = same value as WEBHOOK_SECRET in Render
+Sensors
+  -> ESP32 threshold/trend/rule analysis
+  -> Blynk V0-V10
+  -> Render /esp32-analyse when an anomaly occurs
+  -> Render rule-based advisory (or optional OpenAI advisory)
+  -> ESP32 receives SUMMARY/ACTION
+  -> Blynk V11/V12
 ```
 
-Body:
+GitHub provides the source code used by Render and the ESP32 firmware.
 
-```json
-{
-  "pin": "{device_pin}",
-  "value": "{device_pinValue}",
-  "device": "{device_name}",
-  "timestamp": "{timestamp_iso8601}"
-}
-```
+## 5. Optional OpenAI Mode
 
-## 4. End-to-End Flow
+The Render bridge works without OpenAI using deterministic rule-based advisory output.
 
-```text
-ESP32 -> Blynk V0-V10 -> V9 webhook -> Render -> V11/V12 -> Blynk dashboard
-GitHub repository -> Render deployment
-```
+To enable OpenAI advisory later, configure both:
 
-## 5. Remaining Private Inputs
+- `OPENAI_API_KEY` in Render
+- `BRIDGE_SHARED_SECRET` in Render and the same value locally in `firmware/secrets.h`
 
-The following values must never be committed to GitHub:
+If those values are not configured, the direct integration remains functional in `RULE` mode.
 
-- Wi-Fi SSID/password
-- Blynk Template ID/Auth Token
-- Blynk Device Token for Render
-- Webhook secret
-- OpenAI API key, if AI advisory is enabled
+## 6. Legacy Optional Blynk Webhook Mode
 
-Current Render logs show the only required missing value is `BLYNK_DEVICE_TOKEN`.
+The old webhook path remains available at:
 
-Once `BLYNK_DEVICE_TOKEN` is present in Render and the V9 webhook is created in Blynk, the GitHub-Blynk-Render chain is complete.
+`https://openai-blynk-bridge.onrender.com/blynk-webhook`
+
+It requires:
+
+- `BLYNK_DEVICE_TOKEN`
+- `WEBHOOK_SECRET`
+- a Blynk V9 webhook
+
+This mode is optional and is no longer required for the normal FYP demonstration.
+
+## 7. Remaining Physical/Account Actions
+
+The code and Render bridge are configured. To operate the physical prototype, the user still must:
+
+1. Ensure V0-V12 exist in the Blynk template.
+2. Keep Wi-Fi and Blynk credentials only in local `firmware/secrets.h`.
+3. Compile and upload the latest firmware to the physical ESP32.
+4. Confirm V0-V10 update in Blynk.
+5. Trigger a controlled anomaly and confirm V11/V12 update after the Render response.
+
+Never commit Wi-Fi passwords, Blynk Auth Tokens, OpenAI API keys, or private shared secrets to GitHub.
