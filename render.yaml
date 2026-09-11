@@ -7,13 +7,15 @@ services:
     rootDir: integration/openai-blynk-bridge
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /ready
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: OPENAI_MODEL
         value: gpt-5.6-luna
       - key: OPENAI_API_KEY
+        sync: false
+      - key: BRIDGE_SHARED_SECRET
         sync: false
       - key: BLYNK_DEVICE_TOKEN
         sync: false
