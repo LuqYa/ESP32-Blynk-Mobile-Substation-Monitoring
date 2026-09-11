@@ -84,6 +84,20 @@ struct ConditionResult {
   String reason;
 };
 
+// Manual prototypes keep Arduino's auto-prototype generator from placing
+// declarations that use these custom structs before the struct definitions.
+int severityRank(const String &level);
+void raiseCondition(ConditionResult &result, const String &newLevel, const String &newReason);
+TrendResult detectTrend(const Sample &currentSample);
+ConditionResult evaluateCondition(const Sample &sample, const TrendResult &trend);
+void storeSample(const Sample &sample);
+String jsonEscape(const String &input);
+String jsonNumber(float value, bool valid, uint8_t decimals);
+String responseLine(const String &body, const String &label);
+void requestRenderAdvisory(const Sample &sample, const TrendResult &trend, const ConditionResult &condition);
+void handleBridgeAdvisory(const Sample &sample, const TrendResult &trend, const ConditionResult &condition);
+void sendSensorData();
+
 int severityRank(const String &level) {
   if (level == "CRITICAL") return 2;
   if (level == "WARNING") return 1;
@@ -214,7 +228,7 @@ String jsonEscape(const String &input) {
 
 String jsonNumber(float value, bool valid, uint8_t decimals) {
   if (!valid || isnan(value)) return "null";
-  return String(value, decimals);
+  return String(value, static_cast<unsigned int>(decimals));
 }
 
 String responseLine(const String &body, const String &label) {
