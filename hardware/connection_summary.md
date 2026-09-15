@@ -16,8 +16,8 @@ This file summarises the planned laboratory-scale hardware connections for the p
 |---|---|---|
 | VIN / 5 V supply as appropriate | 5V | Module supply |
 | GND | GND | Common ground |
-| D12 / GPIO 12 | TX | ESP32 receives PZEM data |
-| D13 / GPIO 13 | RX | ESP32 transmits to PZEM |
+| D13 / GPIO 13 | TX | ESP32 receives PZEM data |
+| D12 / GPIO 12 | RX | ESP32 transmits to PZEM |
 
 > RX/TX are crossed: ESP32 RX connects to PZEM TX, while ESP32 TX connects to PZEM RX.
 
@@ -49,8 +49,5 @@ PZEM-004T + CT-/
 - Relative humidity
 - AC voltage
 - AC current
-- Power
-- Frequency
-- Power factor
-- Operating condition: NORMAL / WARNING / CRITICAL
+- Operating condition: NORMAL / WARNING / CRITICAL / SYSTEM FAULT
 - Trend/anomaly status

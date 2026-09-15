@@ -1,43 +1,36 @@
 # Prototype Thresholds and Anomaly Rules
 
-These values are initial laboratory settings for the FYP prototype. They are not utility protection settings and must not be treated as operating limits for energized 33/11 kV equipment.
+Demonstration values only. Validate against collected baseline data and equipment requirements before adopting final FYP thresholds. These are not utility protection settings.
 
-## Threshold Classification
-
-| Parameter | Normal | Warning | Critical |
+| Parameter | Normal threshold region | Warning | Critical |
 |---|---|---|---|
-| Temperature | < 35 °C | 35 to < 40 °C | ≥ 40 °C |
-| Relative humidity | < 70 %RH | 70 to < 80 %RH | ≥ 80 %RH |
-| AC voltage | > 210 V and < 250 V | 200–210 V or 250–260 V | ≤ 200 V or ≥ 260 V |
-| AC current | < 4 A | 4 to < 5 A | ≥ 5 A |
+| Temperature | <35 °C | ≥35 and <40 °C | ≥40 °C |
+| Humidity | <75 % | ≥75 and <85 % | ≥85 % |
+| AC voltage | >210 and <250 V | >200 to ≤210 V or ≥250 to <260 V | ≤200 or ≥260 V |
+| AC current | <3 A | ≥3 and <5 A | ≥5 A |
 
-## Trend-Based Anomaly Rules
+Thresholds are inclusive at warning/critical boundaries. Invalid measurements are excluded.
 
-The ESP32 stores six samples. With a 2-second sampling interval, the oldest and newest usable samples provide an approximately 10-second comparison window.
+## Four-reading trend persistence
 
-A WARNING-level anomaly is generated when one of the following is detected:
+At a nominal two-second interval, four readings span approximately six seconds. Every adjacent reading must strictly increase (or strictly decrease for falling voltage), and total change must meet:
 
-- Temperature rise ≥ 3 °C over the history window.
-- Relative humidity rise ≥ 10 %RH over the history window.
-- Absolute voltage change ≥ 15 V over the history window.
-- Current rise ≥ 1.5 A over the history window.
+- Temperature rise: ≥1.5 °C
+- Humidity rise: ≥5 %
+- Voltage rise or fall: ≥5 V
+- Current rise: ≥0.3 A
 
-## Rule-Based Anomaly Detection
+A plateau or reversal fails the trend rule. Invalid sensor readings reset that sensor's histories; the healthy sensor continues independently. All simultaneous trends appear in V9. STABLE means no confirmed trend, including during the initial four-reading collection period.
 
-The system combines three types of checks:
+## Severity and multiple anomalies
 
-1. **Threshold checking** — compares the latest value against predefined warning and critical ranges.
-2. **Trend checking** — compares recent samples to detect rapid change before a critical threshold is reached.
-3. **Sensor validity checking** — marks invalid DHT11 or PZEM measurements as an abnormal condition.
+Each abnormal parameter is counted once in V11, whether flagged by threshold, trend, or both. Trend-only anomalies count. V11 ranges 0–4 and excludes sensor-fault counts.
 
-The final operating state follows the highest severity detected: `NORMAL < WARNING < CRITICAL`.
+1. Any sensor fault -> SYSTEM FAULT (3), while retaining causes/counts from healthy sensors.
+2. Any critical threshold, or at least two abnormal parameters -> CRITICAL (2).
+3. One abnormal parameter -> WARNING (1).
+4. No abnormal parameters or sensor faults -> NORMAL (0), subject to recovery.
 
-## Calibration of Final Values
+Abnormal classifications update immediately. Returning to NORMAL requires three consecutive normal evaluation cycles. Any new abnormality resets that count. During recovery, V4/V10 retain the previous alarm, V5 explicitly shows recovery progress, V6 requests continued monitoring, and V11 reports current abnormalities (zero). Other abnormal-state transitions are immediate.
 
-The final FYP report should distinguish between:
-
-- initial prototype thresholds used to demonstrate system operation;
-- measured baseline values obtained during laboratory tests; and
-- any final threshold values adopted after testing.
-
-Any final values should be justified using collected data, sensor capability, prototype operating conditions, and applicable equipment requirements.
+Implementation: [monitoring_logic.h](../firmware/monitoring_logic.h).

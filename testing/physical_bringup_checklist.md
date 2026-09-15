@@ -28,7 +28,7 @@ Before connecting sensors, verify the cloud path.
 
 - [ ] Confirm the ESP32 connects to the intended Wi-Fi network.
 - [ ] Confirm the Blynk device shows Online.
-- [ ] Confirm the Blynk template contains V0 through V12 exactly as documented in `blynk/dashboard_setup.md`.
+- [ ] Confirm the Blynk template contains V0 through V11 exactly as documented in `blynk/dashboard_setup.md`.
 - [ ] Confirm no real Wi-Fi password or Blynk Auth Token is stored in GitHub.
 
 If the Blynk device remains offline, check the local Template ID, Template Name, Auth Token, Wi-Fi SSID, Wi-Fi password, and whether the network allows the ESP32 to reach the internet.
@@ -58,18 +58,14 @@ Checklist:
 
 Do not apply condensation or allow water/moisture to contact the electronics during humidity testing.
 
-## Stage 4 — Render Advisory Path
+## Stage 4 — Condition, LED and Event Checks
 
-The Render service is already cloud-tested. This stage confirms the physical ESP32 can use it.
-
-- [ ] With Wi-Fi connected, create a safe abnormal DHT11 test condition.
-- [ ] Confirm Serial Monitor shows the local ESP32 condition result.
-- [ ] Confirm an abnormal condition causes a request to `https://openai-blynk-bridge.onrender.com/esp32-analyse`.
-- [ ] Confirm Serial Monitor shows `Render mode : RULE` unless optional AI mode has been deliberately enabled.
-- [ ] Confirm Blynk V11 receives the advisory summary.
-- [ ] Confirm Blynk V12 receives the recommended check.
-- [ ] Return the sensor to a normal condition.
-- [ ] Confirm V11/V12 return to the normal-monitoring message after recovery.
+- [ ] Confirm disconnected sensors produce SYSTEM FAULT and red sensor LEDs.
+- [ ] Confirm V5 lists the fault cause and V6 provides the corresponding inspection action.
+- [ ] Confirm V9 displays trend text, V10 numeric severity and V11 anomaly count.
+- [ ] Verify all four event codes and actual phone notification delivery using testing/test_procedure.md.
+- [ ] Confirm recovery requires three consecutive normal readings.
+- [ ] Test the optional Render endpoint separately using testing/direct_render_blynk_test.md; the current firmware does not automatically call it.
 
 ## Stage 5 — PZEM Communication Side Only
 
@@ -79,8 +75,8 @@ Planned UART mapping in the firmware:
 
 | ESP32 | Function |
 |---|---|
-| GPIO 12 | RX from PZEM TX |
-| GPIO 13 | TX to PZEM RX |
+| GPIO 13 | RX from PZEM TX |
+| GPIO 12 | TX to PZEM RX |
 
 - [ ] Keep the mains measurement terminals de-energized while first checking the communication-side wiring.
 - [ ] Verify the exact PZEM-004T version and pin labels physically match the project documentation.
@@ -99,9 +95,9 @@ This stage involves hazardous voltage and must be performed only under suitable 
 - [ ] Keep all low-voltage ESP32/user-accessible parts safely separated from hazardous conductors.
 - [ ] Verify voltage using a suitable reference instrument.
 - [ ] Verify current using a suitable reference instrument where available.
-- [ ] Confirm Serial Monitor reports voltage/current/power/frequency/power factor.
-- [ ] Confirm Blynk V2, V3, V5, V6 and V7 update.
-- [ ] Record PZEM and reference readings in `testing/test_results.csv`.
+- [ ] Confirm Serial Monitor reports voltage/current.
+- [ ] Confirm Blynk V2 and V3 update.
+- [ ] Record PZEM and reference readings in `testing/test_results_v0_v11.csv`.
 - [ ] Calculate voltage/current percentage error using the equations in `testing/data_collection_plan.md`.
 
 Do not connect this prototype directly to energized 33 kV or 11 kV equipment.
@@ -120,7 +116,7 @@ After all individual functions are stable:
 - [ ] Run T18 multiple-abnormal-parameter test.
 - [ ] Run T19 Wi-Fi interruption/reconnection test.
 - [ ] Repeat principal tests at least three times where practical.
-- [ ] Record actual values only in `testing/test_results.csv`.
+- [ ] Record actual values only in `testing/test_results_v0_v11.csv`.
 
 ## Evidence to Capture
 
@@ -130,12 +126,12 @@ For the final report/presentation, capture evidence only after the system is ope
 - [ ] ESP32 + DHT11 connection photograph.
 - [ ] PZEM/CT laboratory setup photograph taken from a safe viewpoint.
 - [ ] Serial Monitor normal-condition screenshot.
-- [ ] Serial Monitor abnormal-condition + Render response screenshot.
+- [ ] Serial Monitor abnormal-condition and recovery screenshot.
 - [ ] Blynk normal dashboard screenshot.
 - [ ] Blynk WARNING screenshot.
 - [ ] Blynk CRITICAL screenshot.
-- [ ] Blynk trend anomaly screenshot showing V9/V8.
-- [ ] Blynk V11/V12 advisory screenshot.
+- [ ] Blynk trend anomaly screenshot showing V9 and V11.
+- [ ] Blynk V5/V6 cause/action and event Timeline screenshot.
 - [ ] Reference-instrument comparison photograph/readings where applicable.
 
 ## Stop Conditions

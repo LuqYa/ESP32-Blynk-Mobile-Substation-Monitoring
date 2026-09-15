@@ -19,7 +19,7 @@ The software is intended to use simple and explainable methods suitable for the 
 - predefined threshold checking;
 - trend observation;
 - rule-based anomaly detection; and
-- Normal, Warning, and Critical classification.
+- Normal, Warning, Critical and System Fault classification, with three-reading recovery.
 
 Machine Learning, Node-RED, and MQTT are not required in the current project architecture.
 

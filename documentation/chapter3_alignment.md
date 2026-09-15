@@ -14,27 +14,19 @@ Use the project architecture represented in this repository:
 Sensors / Monitoring Inputs
         |
         v
-      ESP32
+ESP32: Threshold + Four-reading Trend + Multi-anomaly + Recovery
         |
-      Wi-Fi
-        |
-        v
-    Blynk Cloud
+NORMAL / WARNING / CRITICAL / SYSTEM FAULT
         |
         v
-  Blynk Dashboard
-        |
-        v
-Threshold + Trend + Rule-Based Analysis
-        |
- Normal / Warning / Critical
+Wi-Fi -> Blynk V0-V11 Dashboard + Events + Notifications
 ```
 
 The main hardware references are in `hardware/connection_summary.md` and the main firmware is in `firmware/mobile_substation_monitoring.ino`.
 
 ## 3.3 Data Collection
 
-Follow `testing/data_collection_plan.md` and record actual measurements in `testing/test_results.csv`.
+Follow `testing/data_collection_plan.md` and record actual measurements in `testing/test_results_v0_v11.csv`.
 
 Collected parameters include:
 
@@ -42,9 +34,6 @@ Collected parameters include:
 - Relative humidity
 - AC voltage
 - AC current
-- Power
-- Frequency
-- Power factor
 - Overall condition
 - Anomaly status
 

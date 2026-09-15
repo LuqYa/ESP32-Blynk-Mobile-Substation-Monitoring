@@ -1,5 +1,7 @@
 # FYP Implementation Roadmap
 
+> Architecture update (2026-09-15): the historical milestones below describe earlier revisions. Use [current setup](blynk/dashboard_setup.md) and [integration status](INTEGRATION_STATUS.md) for V0–V11, SYSTEM FAULT, event notification and advisory behavior.
+
 ## Phase 1 — Repository and Firmware Foundation
 
 - [x] Create GitHub repository

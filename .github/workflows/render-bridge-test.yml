@@ -6,93 +6,25 @@ on:
     paths:
       - 'integration/openai-blynk-bridge/**'
       - '.github/workflows/render-bridge-test.yml'
+  pull_request:
+    paths:
+      - 'integration/openai-blynk-bridge/**'
+      - '.github/workflows/render-bridge-test.yml'
 
 jobs:
   test-render-bridge:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integration/openai-blynk-bridge
     steps:
-      - name: Check health endpoint
-        run: |
-          set -euo pipefail
-          body="$(curl --fail --silent --show-error --retry 5 --retry-delay 5 https://openai-blynk-bridge.onrender.com/health)"
-          echo "$body"
-          echo "$body" | grep '"ok":true'
-          echo "$body" | grep '"directEsp32Mode":true'
-
-      - name: Test temperature warning advisory contract
-        run: |
-          set -euo pipefail
-          body="$(curl --fail --silent --show-error --retry 5 --retry-delay 5 \
-            -H 'Content-Type: application/json' \
-            -d '{"temperature":37.5,"humidity":55.0,"voltage":230.0,"current":1.2,"condition":"WARNING","trend":"No abnormal trend","reason":"Temperature above warning threshold"}' \
-            https://openai-blynk-bridge.onrender.com/esp32-analyse)"
-          printf '%s\n' "$body"
-          echo "$body" | grep '^SUMMARY:'
-          echo "$body" | grep '^ACTION:'
-          echo "$body" | grep '^MODE:RULE$'
-          echo "$body" | grep -i 'temperature'
-
-      - name: Test humidity warning advisory contract
-        run: |
-          set -euo pipefail
-          body="$(curl --fail --silent --show-error --retry 5 --retry-delay 5 \
-            -H 'Content-Type: application/json' \
-            -d '{"temperature":28.0,"humidity":75.0,"voltage":230.0,"current":1.2,"condition":"WARNING","trend":"No abnormal trend","reason":"Humidity above warning threshold"}' \
-            https://openai-blynk-bridge.onrender.com/esp32-analyse)"
-          printf '%s\n' "$body"
-          echo "$body" | grep '^SUMMARY:'
-          echo "$body" | grep '^ACTION:'
-          echo "$body" | grep '^MODE:RULE$'
-          echo "$body" | grep -i 'humidity'
-
-      - name: Test voltage warning advisory contract
-        run: |
-          set -euo pipefail
-          body="$(curl --fail --silent --show-error --retry 5 --retry-delay 5 \
-            -H 'Content-Type: application/json' \
-            -d '{"temperature":28.0,"humidity":55.0,"voltage":205.0,"current":1.2,"condition":"WARNING","trend":"No abnormal trend","reason":"Voltage outside warning range"}' \
-            https://openai-blynk-bridge.onrender.com/esp32-analyse)"
-          printf '%s\n' "$body"
-          echo "$body" | grep '^SUMMARY:'
-          echo "$body" | grep '^ACTION:'
-          echo "$body" | grep '^MODE:RULE$'
-          echo "$body" | grep -i 'voltage'
-
-      - name: Test current warning advisory contract
-        run: |
-          set -euo pipefail
-          body="$(curl --fail --silent --show-error --retry 5 --retry-delay 5 \
-            -H 'Content-Type: application/json' \
-            -d '{"temperature":28.0,"humidity":55.0,"voltage":230.0,"current":4.4,"condition":"WARNING","trend":"No abnormal trend","reason":"Current above warning threshold"}' \
-            https://openai-blynk-bridge.onrender.com/esp32-analyse)"
-          printf '%s\n' "$body"
-          echo "$body" | grep '^SUMMARY:'
-          echo "$body" | grep '^ACTION:'
-          echo "$body" | grep '^MODE:RULE$'
-          echo "$body" | grep -i 'current'
-
-      - name: Test sensor fault advisory contract
-        run: |
-          set -euo pipefail
-          body="$(curl --fail --silent --show-error --retry 5 --retry-delay 5 \
-            -H 'Content-Type: application/json' \
-            -d '{"temperature":null,"humidity":null,"voltage":230.0,"current":1.2,"condition":"WARNING","trend":"No abnormal trend","reason":"DHT11 communication/read failure"}' \
-            https://openai-blynk-bridge.onrender.com/esp32-analyse)"
-          printf '%s\n' "$body"
-          echo "$body" | grep '^SUMMARY:'
-          echo "$body" | grep '^ACTION:'
-          echo "$body" | grep '^MODE:RULE$'
-          echo "$body" | grep -i 'DHT11\|abnormal\|failure'
-
-      - name: Test critical advisory contract
-        run: |
-          set -euo pipefail
-          body="$(curl --fail --silent --show-error --retry 5 --retry-delay 5 \
-            -H 'Content-Type: application/json' \
-            -d '{"temperature":41.2,"humidity":82.0,"voltage":230.0,"current":1.2,"condition":"CRITICAL","trend":"Rapid temperature rise","reason":"Temperature above critical threshold; Humidity above critical threshold"}' \
-            https://openai-blynk-bridge.onrender.com/esp32-analyse)"
-          printf '%s\n' "$body"
-          echo "$body" | grep '^SUMMARY:'
-          echo "$body" | grep '^ACTION:'
-          echo "$body" | grep '^MODE:RULE$'
-          echo "$body" | grep -i 'critical'
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install
+      - name: Check syntax
+        run: node --check server.js
+      - name: Test current bridge HTTP contracts without live credentials
+        run: npm test

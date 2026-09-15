@@ -1,162 +1,63 @@
-# Blynk Dashboard Setup
+# Blynk V0-V11 Dashboard Setup
 
-This guide matches `firmware/mobile_substation_monitoring.ino` and the direct Render bridge integration.
+ESP32 owns all measurement, condition, trend, recovery and event decisions.
 
-## 1. Create the Device Template
+## Template and datastreams
 
-In Blynk Console, enable Developer Mode and create a template with:
+Template: Mobile Substation Monitoring; hardware: ESP32; connection: WiFi.
+Keep Template ID and device Auth Token in local `firmware/secrets.h`.
 
-- Template Name: `Mobile Substation Monitoring`
-- Hardware: `ESP32`
-- Connection Type: `WiFi`
+| Pin | Name | Type | Range / default |
+|---|---|---|---|
+| V0 | Temperature | Double | 0–60 °C |
+| V1 | Humidity | Integer | 0–100 % |
+| V2 | Voltage | Double | 0–300 V |
+| V3 | Current | Double | 0–100 A |
+| V4 | Overall Condition | String | NORMAL |
+| V5 | Anomaly Cause | String | No abnormal condition |
+| V6 | Recommended Action | String | No inspection required |
+| V7 | DHT Status | Integer | 0–1; default 0 |
+| V8 | PZEM Status | Integer | 0–1; default 0 |
+| V9 | Trend Status | String | STABLE |
+| V10 | Alarm Level | Integer | 0–3; default 0 |
+| V11 | Active Anomalies | Integer | 0–4; default 0 |
 
-Keep the generated Template ID local for `firmware/secrets.h`.
+Firmware truncates V1 humidity to an integer. A gauge may use a smaller display range for the actual laboratory load without changing the datastream mapping.
 
-## 2. Create Virtual Pin Datastreams
+**Migration:** reconfigure old V5–V11 datastream types, remove obsolete V12 widgets, and disable the old V9 webhook before using this firmware. The Render webhook now returns HTTP 410 and never writes to Blynk. Historical values from the old mapping must not be interpreted as new measurements.
 
-Create these Virtual Pin datastreams exactly:
+## Runtime colors
 
-| Pin | Name | Data Type | Unit | Suggested Min | Suggested Max |
-|---|---|---|---|---:|---:|
-| V0 | Temperature | Double | °C | 0 | 60 |
-| V1 | Humidity | Double | %RH | 0 | 100 |
-| V2 | Voltage | Double | V | 0 | 300 |
-| V3 | Current | Double | A | 0 | 10 |
-| V4 | Overall Condition | String | - | - | - |
-| V5 | Power | Double | W | 0 | 2500 |
-| V6 | Frequency | Double | Hz | 40 | 60 |
-| V7 | Power Factor | Double | - | 0 | 1 |
-| V8 | Anomaly Message | String | - | - | - |
-| V9 | Anomaly Flag | Integer | - | 0 | 1 |
-| V10 | Condition Reason | String | - | - | - |
-| V11 | Advisory Summary | String | - | - | - |
-| V12 | Recommended Check | String | - | - | - |
+V7 and V8 remain at 1 (LED on) for both healthy and faulty sensors. Firmware changes `color` using `Blynk.setProperty`: healthy #23C48E, fault #D3435C. Their numeric values are brightness, not sensor-health flags. Both fault causes appear in V5 if both sensors fail.
 
-V0-V10 are written directly by the ESP32 monitoring logic.
-V11-V12 are written by the ESP32 after it requests an advisory from the Render bridge.
+V4 color: NORMAL #23C48E; WARNING #FFC107; CRITICAL #D3435C; SYSTEM FAULT #6C757D. V10 encodes these as 0, 1, 2, 3. Reconnection restores colors. When the device is offline, last-known dashboard values/colors can remain visible; use Blynk's device-online indication to determine freshness.
 
-## 3. Recommended Dashboard Layout
+## Four events and notifications
 
-### System Status
+Create these exact event codes in the template, enable Timeline and notifications for the intended recipients, and apply template changes to the active device.
 
-- Overall Condition -> V4
-- Trend Anomaly Indicator -> V9
-- Anomaly Message -> V8
-- Condition Reason -> V10
+| Event code | Trigger |
+|---|---|
+| condition_warning | Enter WARNING |
+| critical_condition | Enter CRITICAL |
+| system_fault | Enter SYSTEM FAULT |
+| condition_recovered | Return to NORMAL after three consecutive normal readings |
 
-### Environmental Monitoring
+Keep datastream Automation and Event Automation OFF. Event notifications are configured separately and should be ON where alerts are wanted.
 
-- Temperature -> V0
-- Humidity -> V1
-- SuperChart -> V0 and V1
+Firmware logs severity transitions only, with a 60-second cooldown per event code. Disconnected/cooldown transitions are coalesced to the latest state, not replayed as a historical queue. Same-severity cause changes still update V5 but do not generate another event. A condition that starts and ends entirely offline is not replayed. A reconnect after a previously sent abnormal event can emit recovery once the local recovery condition is met. Cloud delivery is verified in Device Timeline; `logEvent` is not a delivery acknowledgement.
 
-### Electrical Monitoring
+Blynk applies a daily event quota; rapid repeated tests can reach it even with this cooldown. See [Blynk events](https://docs.blynk.io/en/getting-started/events-tutorial) and [LED properties](https://docs.blynk.io/en/blynk.apps/widgets-displays/led).
 
-- Voltage -> V2
-- Current -> V3
-- Power -> V5
-- Frequency -> V6
-- Power Factor -> V7
-- SuperChart -> V2 and V3
+## Layout
 
-### Advisory Section
+1. Large Overall Condition V4.
+2. Temperature V0, Humidity V1, Voltage V2, Current V3 in one row.
+3. Anomaly Cause V5 beside Trend Status V9.
+4. Recommended Action V6 beside Active Anomalies V11.
+5. DHT Status V7 and PZEM Status V8 LED widgets.
+6. One historical graph containing V0–V3. V10 can remain internal.
 
-- Advisory Summary -> V11
-- Recommended Check -> V12
+## Verification
 
-Keep V11/V12 visually separate from V4/V8/V9/V10. The core condition classification is still performed locally by the ESP32 threshold/trend/rule-based logic.
-
-## 4. Create the Device
-
-Create a device from the template:
-
-- Template: `Mobile Substation Monitoring`
-- Device Name: `FYP Mobile Substation Prototype`
-
-Open Device Info and copy the Auth Token only to your local `firmware/secrets.h`.
-
-Never commit the Auth Token to GitHub.
-
-## 5. Default Integration - No Blynk Webhook Required
-
-The default integration is:
-
-```text
-ESP32 -> Blynk V0-V10
-   |
-   +-> Render /esp32-analyse when an abnormal condition is active
-           |
-           v
-      SUMMARY / ACTION
-           |
-           v
-       ESP32 -> Blynk V11/V12
-```
-
-Render endpoint:
-
-`https://openai-blynk-bridge.onrender.com/esp32-analyse`
-
-The firmware already contains this public URL.
-
-Render advisory may be requested when the ESP32 detects:
-
-- threshold WARNING
-- threshold CRITICAL
-- DHT11 or PZEM read/communication fault
-- trend anomaly
-
-V9 remains specifically the trend-anomaly flag. A threshold WARNING or CRITICAL can therefore request an advisory even when V9 remains `0`.
-
-For the normal FYP demonstration you do NOT need:
-
-- a Blynk webhook
-- a Blynk Device Token stored on Render
-
-## 6. Optional AI Advisory
-
-The Render bridge uses rule-based advisory output by default.
-
-If OpenAI advisory is enabled later, keep the OpenAI API key in Render only and use a private shared secret between the ESP32 and Render. Do not place the OpenAI API key in ESP32 firmware or Blynk.
-
-## 7. Test Sequence
-
-1. Compile and upload the latest firmware.
-2. Confirm ESP32 connects to Wi-Fi and Blynk.
-3. Confirm V0-V10 update.
-4. Confirm the prototype reaches a stable NORMAL condition.
-5. Run a controlled threshold WARNING test, for example temperature above 35 °C, and confirm V4 becomes `WARNING`.
-6. Confirm Serial Monitor shows the Render response and V11/V12 update, even if V9 remains `0`.
-7. Run a controlled trend-anomaly test after the history buffer has enough samples and confirm V9 becomes `1`.
-8. Confirm V11 shows the advisory summary and V12 shows the recommended laboratory check.
-9. Run a controlled CRITICAL test only within safe laboratory limits and confirm V4 becomes `CRITICAL` and V11/V12 update.
-10. Return the prototype to a normal condition and confirm the advisory status resets.
-11. Record only real measurements and observed results in `testing/test_results.csv`.
-
-## 8. Automated Verification Already Completed
-
-GitHub Actions has verified the live Render bridge for:
-
-- health endpoint
-- temperature warning
-- humidity warning
-- voltage warning
-- current warning
-- sensor fault
-- critical condition
-
-The cloud tests verify that Render returns the exact response contract expected by the ESP32:
-
-```text
-SUMMARY:<short interpretation>
-ACTION:<safe laboratory check>
-MODE:RULE
-```
-
-## Important Notes
-
-- Virtual Pins are Blynk software channels, not ESP32 GPIO pins.
-- The PZEM-004T values are AC measurements; do not describe them as direct DC battery voltage/current measurements.
-- Prototype thresholds are laboratory values and require baseline-test justification.
-- Do not connect this prototype directly to energized 33 kV or 11 kV equipment.
-- The Render/OpenAI advisory layer is not a protection relay, interlock, switching controller, or automatic operating authority.
+Upload the firmware, confirm the device is online, then run [the test procedure](../testing/test_procedure.md). Verify actual LED colors and event/phone delivery on the physical device; repository/cloud tests cannot establish those results.

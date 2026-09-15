@@ -1,142 +1,22 @@
-# Integration Status
+# Integration Status — V0-V11
 
-## 1. GitHub
+Repository: LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring.
+Connected Render service: openai-blynk-bridge (Singapore), auto-deploys main.
+Service URL: https://openai-blynk-bridge.onrender.com
 
-Status: CONNECTED
+## Architecture
 
-Repository:
+ESP32 -> Blynk V0–V11. All thresholds, four-reading trends, multi-anomaly counting, sensor faults, three-reading recovery and four events execute on ESP32. Render's optional /esp32-analyse returns advisory text only. Legacy /blynk-webhook returns 410 and cannot write to Blynk.
 
-`LuqYa/ESP32-Blynk-Mobile-Substation-Monitoring`
+## Verification
 
-Branch:
+See the commit-specific GitHub Actions results for firmware compilation, monitoring behavior tests, bridge contract tests and repository safety checks. Check live /health for architecture=V0-V11 after deployment. Previous PASS statements applied to the former architecture and are not hardware evidence for this version.
 
-`main`
+## Physical/account steps
 
-GitHub is the source of truth for the ESP32 firmware, Blynk setup documentation, and Render bridge code.
+1. Apply the datastream types, colors and four event notification settings in [Blynk setup](blynk/dashboard_setup.md).
+2. Create local secrets.h, compile and upload firmware/firmware.ino to the actual ESP32.
+3. Verify the latest UART mapping (RX=13, TX=12) against the physical wiring.
+4. Run [tests](testing/test_procedure.md) and record actual measurements, LED colors and phone notifications.
 
-Firmware CI status: PASS
-
-The repository includes `.github/workflows/firmware-build.yml`, which installs Arduino CLI, the ESP32 core, Blynk, DHT sensor library, Adafruit Unified Sensor and PZEM004Tv30, then compiles the firmware automatically.
-
-Latest verified build used:
-
-- ESP32 Arduino core 3.3.11
-- Blynk 1.3.5
-- DHT sensor library 1.4.7
-- Adafruit Unified Sensor 1.1.15
-- PZEM004Tv30 1.2.1
-
-Cloud bridge CI status: PASS
-
-The repository also includes `.github/workflows/render-bridge-test.yml`. The live integration test now verifies:
-
-- `GET /health`
-- temperature WARNING advisory
-- humidity WARNING advisory
-- voltage WARNING advisory
-- current WARNING advisory
-- sensor-fault advisory
-- CRITICAL-condition advisory
-- firmware contract lines `SUMMARY:`, `ACTION:` and `MODE:RULE`
-
-## 2. Render
-
-Status: DEPLOYED, LIVE, AND CLOUD-TESTED
-
-Service:
-
-`openai-blynk-bridge`
-
-Public URL:
-
-`https://openai-blynk-bridge.onrender.com`
-
-Default ESP32 advisory endpoint:
-
-`https://openai-blynk-bridge.onrender.com/esp32-analyse`
-
-Health endpoint:
-
-`https://openai-blynk-bridge.onrender.com/health`
-
-The default direct integration does NOT require a Blynk Device Token or a Blynk webhook on Render.
-
-## 3. Blynk
-
-Status: PHYSICAL ESP32 CONNECTION REQUIRED
-
-Required datastreams:
-
-- V0 Temperature
-- V1 Humidity
-- V2 Voltage
-- V3 Current
-- V4 Overall Condition
-- V5 Power
-- V6 Frequency
-- V7 Power Factor
-- V8 Anomaly Message
-- V9 Trend Anomaly Flag
-- V10 Condition Reason
-- V11 Advisory Summary
-- V12 Recommended Check
-
-V0-V10 are written by the ESP32 monitoring firmware.
-V11-V12 are written by the ESP32 after it receives an advisory response from Render.
-
-No Blynk webhook is required for the default integration.
-
-## 4. Default End-to-End Flow
-
-```text
-Sensors
-  -> ESP32 threshold/trend/rule analysis
-  -> Blynk V0-V10
-  -> Render /esp32-analyse on WARNING, CRITICAL, sensor fault, or trend anomaly
-  -> Render rule-based advisory (or optional OpenAI advisory)
-  -> ESP32 receives SUMMARY/ACTION
-  -> Blynk V11/V12
-```
-
-V9 remains specifically the trend-anomaly flag. Threshold WARNING/CRITICAL conditions can still request a Render advisory even when V9 = 0.
-
-## 5. Optional OpenAI Mode
-
-The Render bridge works without OpenAI using deterministic rule-based advisory output.
-
-To enable OpenAI advisory later, configure both:
-
-- `OPENAI_API_KEY` in Render
-- `BRIDGE_SHARED_SECRET` in Render and the same value locally in `firmware/secrets.h`
-
-If those values are not configured, the direct integration remains functional in `RULE` mode.
-
-## 6. Legacy Optional Blynk Webhook Mode
-
-The old webhook path remains available at:
-
-`https://openai-blynk-bridge.onrender.com/blynk-webhook`
-
-It requires:
-
-- `BLYNK_DEVICE_TOKEN`
-- `WEBHOOK_SECRET`
-- a Blynk V9 webhook
-
-This mode is optional and is no longer required for the normal FYP demonstration.
-
-## 7. Remaining Physical/Account Actions
-
-The firmware compiles successfully in GitHub Actions and the live Render endpoint passes automated tests for all main advisory categories. To operate the physical prototype, the remaining actions are:
-
-1. Ensure V0-V12 exist in the Blynk template.
-2. Keep Wi-Fi and Blynk credentials only in local `firmware/secrets.h`.
-3. Open `firmware/firmware.ino` in Arduino IDE.
-4. Select the actual ESP32 board and COM port.
-5. Upload the latest firmware to the physical ESP32.
-6. Confirm V0-V10 update in Blynk.
-7. Run the tests in `testing/direct_render_blynk_test.md`.
-8. Trigger controlled WARNING, CRITICAL and trend-anomaly cases and confirm V11/V12 update after the Render response.
-9. Record only actual measurements in `testing/test_results.csv`.
-
-Never commit Wi-Fi passwords, Blynk Auth Tokens, OpenAI API keys, or private shared secrets to GitHub.
+A Render deploy does not flash the ESP32 or change the user's Blynk template.

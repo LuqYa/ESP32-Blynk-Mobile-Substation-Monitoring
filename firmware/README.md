@@ -40,35 +40,25 @@ Required local values:
 #define BLYNK_TEMPLATE_NAME "Mobile Substation Monitoring"
 ```
 
-`BRIDGE_SHARED_SECRET` is optional and is only required later if OpenAI AI-mode authentication is enabled on Render.
+The current V0–V11 firmware does not make automatic Render requests; the Render advisory endpoint remains independently available.
 
 ## Current Pin Plan
 
 | ESP32 | Function |
 |---|---|
 | GPIO 2 | DHT11 data |
-| GPIO 12 | UART RX from PZEM TX |
-| GPIO 13 | UART TX to PZEM RX |
+| GPIO 13 | UART RX from PZEM TX |
+| GPIO 12 | UART TX to PZEM RX |
 
 The ESP32 and PZEM communication uses `Serial2` hardware UART.
 
 ## Firmware Functions
 
-The current firmware performs:
+The current firmware reads DHT11 temperature/humidity and PZEM AC voltage/current. It publishes V0–V11, updates sensor LED colors, and implements four-reading trends, distinct-parameter counting, SYSTEM FAULT priority, three-normal-reading recovery and four event codes.
 
-- DHT11 temperature measurement
-- DHT11 humidity measurement
-- PZEM-004T voltage measurement
-- PZEM-004T current measurement
-- PZEM-004T power, energy, frequency and power-factor measurement
-- Threshold checking
-- Short-window trend detection
-- Rule-based anomaly detection
-- Normal / Warning / Critical condition classification
-- Blynk V0-V10 dashboard transmission
-- Direct HTTPS request to Render when WARNING, CRITICAL, sensor fault or trend anomaly occurs
-- Render advisory result written to Blynk V11 and V12
-- Serial Monitor diagnostic output
+Decision logic is in `monitoring_logic.h`, shared with host behavior tests. The sketch retains its existing folder and entry point. Monitoring starts without waiting indefinitely for Wi-Fi/Blynk; connection attempts are bounded and runtime colors refresh after reconnect.
+
+See [Blynk setup](../blynk/dashboard_setup.md) and [thresholds](../testing/thresholds.md).
 
 ## GitHub Compile Check
 

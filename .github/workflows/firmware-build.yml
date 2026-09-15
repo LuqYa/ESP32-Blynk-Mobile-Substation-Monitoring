@@ -2,13 +2,14 @@ name: ESP32 Firmware Build
 
 on:
   push:
-    branches: [main]
     paths:
       - "firmware/**"
+      - "testing/monitoring_logic_test.cpp"
       - ".github/workflows/firmware-build.yml"
   pull_request:
     paths:
       - "firmware/**"
+      - "testing/monitoring_logic_test.cpp"
       - ".github/workflows/firmware-build.yml"
   workflow_dispatch:
 
@@ -19,6 +20,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Test monitoring decisions and event policy
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror testing/monitoring_logic_test.cpp -o /tmp/monitoring-test
+          /tmp/monitoring-test
 
       - name: Install Arduino CLI
         uses: arduino/setup-arduino-cli@v2
