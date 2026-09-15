@@ -23,10 +23,7 @@ bool displayedDht = false, displayedPzem = false;
 int displayedLevel = -1;
 unsigned long lastConnectAttempt = 0;
 
-BLYNK_CONNECTED() {
-  // Restore runtime colors on reconnect; never sync old cloud decisions back.
-  refreshProperties = true;
-}
+bool wasConnected = false;
 
 void publishStatus() {
   if (!Blynk.connected() || !haveSample) return;
@@ -98,6 +95,10 @@ void setup() {
 }
 
 void loop() {
+  const bool connected = Blynk.connected();
+  // Restore colors after reconnect without syncing old cloud decisions back.
+  if (connected && !wasConnected) refreshProperties = true;
+  wasConnected = connected;
   timer.run();
   if (Blynk.connected()) Blynk.run();
   else if (millis() - lastConnectAttempt >= 10000UL) {
