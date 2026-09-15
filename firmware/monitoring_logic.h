@@ -44,13 +44,14 @@ public:
       values[3] = value;
     }
   }
+  // Tiny float-rounding tolerance preserves decimal delta boundaries (e.g. 1.3-1.0).
   bool rising(float delta) const {
     return count == 4 && values[0] < values[1] && values[1] < values[2]
-      && values[2] < values[3] && values[3] - values[0] >= delta;
+      && values[2] < values[3] && values[3] - values[0] + 0.00001f >= delta;
   }
   bool falling(float delta) const {
     return count == 4 && values[0] > values[1] && values[1] > values[2]
-      && values[2] > values[3] && values[0] - values[3] >= delta;
+      && values[2] > values[3] && values[0] - values[3] + 0.00001f >= delta;
   }
 };
 

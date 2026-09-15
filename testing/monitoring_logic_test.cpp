@@ -56,6 +56,12 @@ int main() {
   { Monitor m; Result r; for (float h : {55.f,57.f,59.f,61.f}) {
       auto s=normal(); s.humidity=h; r=m.update(s);
     } assert(r.level==WARNING); }
+  { Monitor m; Result r; for (float a : {1.f,1.1f,1.2f,1.3f}) {
+      auto s=normal(); s.current=a; r=m.update(s);
+    } assert(r.level==WARNING && r.activeAnomalies==1); }
+  { Monitor m; Result r; for (float a : {1.f,1.05f,1.1f,1.2f}) {
+      auto s=normal(); s.current=a; r=m.update(s);
+    } assert(r.level==NORMAL); }
   // Fault priority preserves anomalies from the healthy sensor; both faults reported.
   { Monitor m; auto s=normal(); s.dhtValid=false; s.current=5;
     auto r=m.update(s); assert(r.level==SYSTEM_FAULT && r.activeAnomalies==1);
